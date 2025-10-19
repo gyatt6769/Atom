@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atom Messenger</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; }
+        .spinner { border: 3px solid rgba(96, 165, 250, 0.3); border-top-color: #06b6d4; border-radius: 50%; width: 48px; height: 48px; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getDatabase, ref, set, push, onValue, update, remove, get, off } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyA8dNOz8EL6vlUK7GGSRXQaBLXoJgxDT4s",
+            authDomain: "atom-messenger-e4a26.firebaseapp.com",
+            databaseURL: "https://atom-messenger-e4a26-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "atom-messenger-e4a26",
+            storageBucket: "atom-messenger-e4a26.firebasestorage.app",
+            messagingSenderId: "637158834551",
+            appId: "1:637158834551:web:2e9562d345bb488982e172",
+            measurementId: "G-TH8NYZJBRM"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const database = getDatabase(app);
+
+        let state = {
+            currentUser: null,
+            view: 'auth',
+            authMode: 'login',
+            username: '',
+            password: '',
+            avatarUrl: '',
+            friendRequests: [],
+            friends: [],
+            blockedUsers: [],
+            messages: [],
+            selectedFriend: null,
+            messageInput: '',
+            friendRequestInput: '',
+            imageUrlInput: '',
+            newAvatarUrl: '',
+            showSettings: false,
+            theme: 'dark',
+            error: '',
+            allUsers: []
+        };
+
+        const icons = {
+            users: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+            send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>',
+            userPlus: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>',
+            settings: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v6m0 6v6m8.66-15.66l-4.24 4.24m-8.48 8.48l-4.24 4.24m16.97-4.24l-4.24-4.24m-8.48-8.48l-4.24-4.24"></path></svg>',
+            logout: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>',
+            x: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
+            check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+            ban: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>',
+            moon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>',
+            sun: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>',
+            image: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>'
+        };
+
+        const themes = {
+            dark: {
+                bg: 'bg-black',
+                secondary: 'bg-gray-900',
+                tertiary: 'bg-gray-800',
+                text: 'text-white',
+                textSecondary: 'text-gray-300',
+                accent: 'text-cyan-400',
+                accentBg: 'bg-cyan-400',
+                border: 'border-gray-700',
+                hover: 'hover:bg-gray-800'
+            },
+            light: {
+                bg: 'bg-white',
+                secondary: 'bg-gray-50',
+                tertiary: 'bg-gray-100',
+                text: 'text-gray-900',
+                textSecondary: 'text-gray-600',
+                accent: 'text-purple-600',
+                accentBg: 'bg-purple-600',
+                border: 'border-gray-300',
+                hover: 'hover:bg-gray-100'
+            }
+        };
+
+        // Auth listener
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                const userRef = ref(database, `users/${user.uid}`);
+                const snapshot = await get(userRef);
+                if (snapshot.exists()) {
+                    state.currentUser = { ...snapshot.val(), uid: user.uid };
+                    state.view = 'main';
+                    state.theme = state.currentUser.theme || 'dark';
+                    render();
+                    setupListeners();
+                }
+            } else {
+                state.currentUser = null;
+                state.view = 'auth';
+                render();
+            }
+        });
+
+        function setupListeners() {
+            if (!state.currentUser) return;
+
+            // Friend requests
+            const requestsRef = ref(database, `friendRequests/${state.currentUser.uid}`);
+            onValue(requestsRef, (snapshot) => {
+                state.friendRequests = [];
+                snapshot.forEach((child) => {
+                    state.friendRequests.push({ id: child.key, ...child.val() });
+                });
+                render();
+            });
+
+            // Friends
+            const friendsRef = ref(database, `users/${state.currentUser.uid}/friends`);
+            onValue(friendsRef, async (snapshot) => {
+                state.friends = [];
+                const promises = [];
+                snapshot.forEach((child) => {
+                    promises.push(
+                        get(ref(database, `users/${child.key}`)).then((friendSnapshot) => {
+                            if (friendSnapshot.exists()) {
+                                state.friends.push({ uid: child.key, ...friendSnapshot.val() });
+                            }
+                        })
+                    );
+                });
+                await Promise.all(promises);
+                render();
+            });
+
+            // Blocked users
+            const blockedRef = ref(database, `users/${state.currentUser.uid}/blocked`);
+            onValue(blockedRef, (snapshot) => {
+                state.blockedUsers = [];
+                snapshot.forEach((child) => {
+                    state.blockedUsers.push(child.key);
+                });
+                render();
+            });
+
+            // All users
+            const usersRef = ref(database, 'users');
+            onValue(usersRef, (snapshot) => {
+                state.allUsers = [];
+                snapshot.forEach((child) => {
+                    state.allUsers.push({ uid: child.key, ...child.val() });
+                });
+            });
+        }
+
+        function setupMessageListener() {
+            if (!state.currentUser || !state.selectedFriend) return;
+            const chatId = [state.currentUser.uid, state.selectedFriend.uid].sort().join('_');
+            const messagesRef = ref(database, `messages/${chatId}`);
+            
+            onValue(messagesRef, (snapshot) => {
+                state.messages = [];
+                snapshot.forEach((child) => {
+                    state.messages.push({ id: child.key, ...child.val() });
+                });
+                state.messages.sort((a, b) => a.timestamp - b.timestamp);
+                render();
+                setTimeout(() => {
+                    const msgContainer = document.getElementById('messages-container');
+                    if (msgContainer) msgContainer.scrollTop = msgContainer.scrollHeight;
+                }, 100);
+            });
+        }
+
+        async function handleAuth(e) {
+            e.preventDefault();
+            state.error = '';
+
+            if (!state.username || !state.password) {
+                state.error = 'Please fill in all fields';
+                render();
+                return;
+            }
+
+            const email = `${state.username.toLowerCase()}@messaging.app`;
+
+            try {
+                if (state.authMode === 'signup') {
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, state.password);
+                    const user = userCredential.user;
+
+                    const usersSnapshot = await get(ref(database, 'users'));
+                    let usernameExists = false;
+                    usersSnapshot.forEach((child) => {
+                        if (child.val().username === state.username) {
+                            usernameExists = true;
+                        }
+                    });
+
+                    if (usernameExists) {
+                        await user.delete();
+                        state.error = 'Username already taken';
+                        render();
+                        return;
+                    }
+
+                    await set(ref(database, `users/${user.uid}`), {
+                        username: state.username,
+                        avatar: state.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${state.username}`,
+                        theme: 'dark',
+                        createdAt: Date.now()
+                    });
+
+                    state.username = '';
+                    state.password = '';
+                    state.avatarUrl = '';
+                } else {
+                    await signInWithEmailAndPassword(auth, email, state.password);
+                    state.username = '';
+                    state.password = '';
+                }
+            } catch (err) {
+                if (err.code === 'auth/email-already-in-use') {
+                    state.error = 'Username already exists';
+                } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+                    state.error = 'Invalid username or password';
+                } else if (err.code === 'auth/weak-password') {
+                    state.error = 'Password should be at least 6 characters';
+                } else {
+                    state.error = err.message;
+                }
+                render();
+            }
+        }
+
+        async function handleLogout() {
+            await signOut(auth);
+            state.view = 'auth';
+            state.selectedFriend = null;
+            state.messages = [];
+        }
+
+        async function sendFriendRequest() {
+            if (!state.friendRequestInput.trim()) return;
+
+            const targetUser = state.allUsers.find(u => u.username === state.friendRequestInput && u.uid !== state.currentUser.uid);
+
+            if (!targetUser) {
+                state.error = 'User not found';
+                render();
+                return;
+            }
+
+            if (state.friends.some(f => f.uid === targetUser.uid)) {
+                state.error = 'Already friends with this user';
+                render();
+                return;
+            }
+
+            if (state.blockedUsers.includes(targetUser.uid)) {
+                state.error = 'You have blocked this user';
+                render();
+                return;
+            }
+
+            const existingRequest = await get(ref(database, `friendRequests/${targetUser.uid}/${state.currentUser.uid}`));
+            if (existingRequest.exists()) {
+                state.error = 'Friend request already sent';
+                render();
+                return;
+            }
+
+            await set(ref(database, `friendRequests/${targetUser.uid}/${state.currentUser.uid}`), {
+                from: state.currentUser.username,
+                fromUid: state.currentUser.uid,
+                timestamp: Date.now()
+            });
+
+            state.friendRequestInput = '';
+            state.error = '';
+            render();
+        }
+
+        async function acceptFriendRequest(request) {
+            await set(ref(database, `users/${state.currentUser.uid}/friends/${request.fromUid}`), true);
+            await set(ref(database, `users/${request.fromUid}/friends/${state.currentUser.uid}`), true);
+            await remove(ref(database, `friendRequests/${state.currentUser.uid}/${request.fromUid}`));
+        }
+
+        async function declineFriendRequest(request) {
+            await remove(ref(database, `friendRequests/${state.currentUser.uid}/${request.fromUid}`));
+        }
+
+        async function blockUser(friendUid) {
+            await set(ref(database, `users/${state.currentUser.uid}/blocked/${friendUid}`), true);
+            await remove(ref(database, `users/${state.currentUser.uid}/friends/${friendUid}`));
+            await remove(ref(database, `users/${friendUid}/friends/${state.currentUser.uid}`));
+            if (state.selectedFriend?.uid === friendUid) {
+                state.selectedFriend = null;
+            }
+            render();
+        }
+
+        async function unblockUser(friendUid) {
+            await remove(ref(database, `users/${state.currentUser.uid}/blocked/${friendUid}`));
+        }
+
+        async function sendMessage() {
+            if (!state.messageInput.trim() || !state.selectedFriend) return;
+
+            const chatId = [state.currentUser.uid, state.selectedFriend.uid].sort().join('_');
+            const messagesRef = ref(database, `messages/${chatId}`);
+            const newMessageRef = push(messagesRef);
+
+            await set(newMessageRef, {
+                text: state.messageInput,
+                senderId: state.currentUser.uid,
+                senderName: state.currentUser.username,
+                timestamp: Date.now(),
+                type: 'text'
+            });
+
+            state.messageInput = '';
+            render();
+        }
+
+        async function sendImage() {
+            if (!state.imageUrlInput.trim() || !state.selectedFriend) return;
+
+            const chatId = [state.currentUser.uid, state.selectedFriend.uid].sort().join('_');
+            const messagesRef = ref(database, `messages/${chatId}`);
+            const newMessageRef = push(messagesRef);
+
+            await set(newMessageRef, {
+                imageUrl: state.imageUrlInput,
+                senderId: state.currentUser.uid,
+                senderName: state.currentUser.username,
+                timestamp: Date.now(),
+                type: 'image'
+            });
+
+            state.imageUrlInput = '';
+            render();
+        }
+
+        async function updateAvatar() {
+            if (!state.newAvatarUrl.trim()) return;
+
+            await update(ref(database, `users/${state.currentUser.uid}`), {
+                avatar: state.newAvatarUrl
+            });
+
+            state.currentUser.avatar = state.newAvatarUrl;
+            state.newAvatarUrl = '';
+            render();
+        }
+
+        async function toggleTheme() {
+            const newTheme = state.theme === 'dark' ? 'light' : 'dark';
+            state.theme = newTheme;
+            await update(ref(database, `users/${state.currentUser.uid}`), {
+                theme: newTheme
+            });
+            render();
+        }
+
+        function selectFriend(friend) {
+            state.selectedFriend = friend;
+            state.messages = [];
+            render();
+            setupMessageListener();
+        }
+
+        function render() {
+            const colors = themes[state.theme];
+            const app = document.getElementById('app');
+
+            if (state.view === 'auth') {
+                app.innerHTML = `
+                    <div class="min-h-screen ${colors.bg} ${colors.text} flex items-center justify-center p-4">
+                        <div class="${colors.secondary} p-8 rounded-lg shadow-2xl w-full max-w-md border ${colors.border}">
+                            <h1 class="text-3xl font-bold mb-6 text-center ${colors.accent}">
+                                ${state.authMode === 'login' ? 'Login' : 'Sign Up'}
+                            </h1>
+                            ${state.error ? `<div class="bg-red-500 text-white p-3 rounded mb-4">${state.error}</div>` : ''}
+                            <form id="auth-form" class="space-y-4">
+                                <input type="text" id="username" placeholder="Username" value="${state.username}" 
+                                    class="w-full p-3 ${colors.tertiary} ${colors.text} rounded border ${colors.border} focus:outline-none focus:ring-2 focus:ring-cyan-400">
+                                <input type="password" id="password" placeholder="Password" value="${state.password}"
+                                    class="w-full p-3 ${colors.tertiary} ${colors.text} rounded border ${colors.border} focus:outline-none focus:ring-2 focus:ring-cyan-400">
+                                ${state.authMode === 'signup' ? `
+                                    <input type="url" id="avatar-url" placeholder="Avatar URL (optional)" value="${state.avatarUrl}"
+                                        class="w-full p-3 ${colors.tertiary} ${colors.text} rounded border ${colors.border} focus:outline-none focus:ring-2 focus:ring-cyan-400">
+                                ` : ''}
+                                <button type="submit" class="w-full ${colors.accentBg} text-white p-3 rounded font-semibold hover:opacity-90 transition">
+                                    ${state.authMode === 'login' ? 'Login' : 'Sign Up'}
+                                </button>
+                            </form>
+                            <p class="mt-4 text-center ${colors.textSecondary}">
+                                ${state.authMode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+                                <button id="toggle-auth" class="${colors.accent} font-semibold hover:underline">
+                                    ${state.authMode === 'login' ? 'Sign Up' : 'Login'}
+                                </button>
+                            </p>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('auth-form').onsubmit = handleAuth;
+                document.getElementById('username').oninput = (e) => state.username = e.target.value;
+                document.getElementById('password').oninput = (e) => state.password = e.target.value;
+                if (state.authMode === 'signup') {
+                    document.getElementById('avatar-url').oninput = (e) => state.avatarUrl = e.target.value;
+                }
+                document.getElementById('toggle-auth').onclick = () => {
+                    state.authMode = state.authMode === 'login' ? 'signup' : 'login';
+                    state.error = '';
+                    render();
+                };
+
+                return;
+            }
+
+            // Main view
+            app.innerHTML = `
+                <div class="flex h-screen ${colors.bg} ${colors.text}">
+                    <!-- Sidebar -->
+                    <div class="w-80 ${colors.secondary} border-r ${colors.border} flex flex-col">
+                        <!-- User Profile -->
+                        <div class="p-4 ${colors.tertiary} border-b ${colors.border} flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <img src="${state.currentUser.avatar}" alt="Avatar" class="w-10 h-10 rounded-full">
+                                <span class="font-semibold">${state.currentUser.username}</span>
+                            </div>
+                            <div class="flex gap-2">
+                                <button id="settings-btn" class="p-2 ${colors.hover} rounded">${icons.settings}</button>
+                                <button id="logout-btn" class="p-2 ${colors.hover} rounded">${icons.logout}</button>
+                            </div>
+                        </div>
+
+                        <!-- Friend Requests -->
+                        ${state.friendRequests.length > 0 ? `
+                            <div class="p-4 border-b ${colors.border}">
+                                <h3 class="font-semibold mb-2 flex items-center gap-2">
+                                    ${icons.userPlus}
+                                    Friend Requests (${state.friendRequests.length})
+                                </h3>
+                                ${state.friendRequests.map(req => `
+                                    <div class="flex items-center justify-between p-2 ${colors.tertiary} rounded mb-2">
+                                        <span class="text-sm">${req.from}</span>
+                                        <div class="flex gap-2">
+                                            <button onclick="window.acceptRequest('${req.fromUid}')" class="p-1 bg-green-600 rounded hover:bg-green-700">${icons.check}</button>
+                                            <button onclick="window.declineRequest('${req.fromUid}')" class="p-1 bg-red-600 rounded hover:bg-red-700">${icons.x}</button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+
+                        <!-- Add Friend -->
+                        <div class="p-4 border-b ${colors.border}">
+                            <div class="flex gap-2">
+                                <input type="text" id="friend-request-input" placeholder="Enter username" value="${state.friendRequestInput}"
+                                    class="flex-1 p-2 ${colors.tertiary} rounded border ${colors.border} focus:outline-none text-sm">
+                                <button id="send-friend-request" class="${colors.accentBg} text-white p-2 rounded hover:opacity-90">${icons.userPlus}</button>
+                            </div>
+                            ${state.error ? `<p class="text-red-500 text-xs mt-2">${state.error}</p>` : ''}
+                        </div>
+
+                        <!-- Friends List -->
+                        <div class="flex-1 overflow-y-auto">
+                            <div class="p-4">
+                                <h3 class="font-semibold mb-3 flex items-center gap-2">
+                                    ${icons.users}
+                                    Friends (${state.friends.length})
+                                </h3>
+                                ${state.friends.map(friend => `
+                                    <div onclick="window.selectFriend('${friend.uid}')" 
+                                        class="flex items-center gap-3 p-3 rounded cursor-pointer mb-2 ${state.selectedFriend?.uid === friend.uid ? colors.tertiary : colors.hover}">
+                                        <img src="${friend.avatar}" alt="${friend.username}" class="w-10 h-10 rounded-full">
+                                        <span>${friend.username}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Chat Area -->
+                    <div class="flex-1 flex flex-col">
+                        ${state.selectedFriend ? `
+                            <!-- Chat Header -->
+                            <div class="p-4 ${colors.secondary} border-b ${colors.border} flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <img src="${state.selectedFriend.avatar}" alt="${state.selectedFriend.username}" class="w-10 h-10 rounded-full">
+                                    <span class="font-semibold">${state.selectedFriend.username}</span>
+                                </div>
+                                <button onclick="window.blockFriend('${state.selectedFriend.uid}')" class="p-2 bg-red-600 rounded hover:bg-red-700 flex items-center gap-2 text-sm">
+                                    ${icons.ban}
+                                    Block
+                                </button>
+                            </div>
+
+                            <!-- Messages -->
+                            <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-3">
+                                ${state.messages.map(msg => `
+                                    <div class="flex ${msg.senderId === state.currentUser.uid ? 'justify-end' : 'justify-start'}">
+                                        <div class="max-w-md rounded-lg p-3 ${msg.senderId === state.currentUser.uid ? `${colors.accentBg} text-white` : colors.tertiary}">
+                                            <div class="text-xs opacity-75 mb-1">${msg.senderName}</div>
+                                            ${msg.type === 'text' ? `<div class="break-words">${msg.text}</div>` : `<img src="${msg.imageUrl}" alt="Shared" class="max-w-full rounded">`}
+                                            <div class="text-xs opacity-75 mt-1">${new Date(msg.timestamp).toLocaleTimeString()}</div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+
+                            <!-- Message Input -->
+                            <div class="p-4 ${colors.secondary} border-t ${colors.border}">
+                                <div class="flex gap-2 mb-2">
+                                    <input type="text" id="image-url-input" placeholder="Paste image URL..." value="${state.imageUrlInput}"
+                                        class="flex-1 p-2 ${colors.tertiary} rounded border ${colors.border} focus:outline-none text-sm">
+                                    <button id="send-image-btn" class="${colors.accentBg} text-white px-4 rounded hover:opacity-90">${icons.image}</button>
+                                </div>
+                                <div class="flex gap-2">
+                                    <input type="text" id="message-input" placeholder="Type a message..." value="${state.messageInput}"
+                                        class="flex-1 p-3 ${colors.tertiary} rounded border ${colors.border} focus:outline-none">
+                                    <button id="send-message-btn" class="${colors.accentBg} text-white p-3 rounded hover:opacity-90">${icons.send}</button>
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="flex-1 flex items-center justify-center">
+                                <p class="${colors.textSecondary}">Select a friend to start chatting</p>
+                            </div>
+                        `}
+                    </div>
+
+                    <!-- Settings Modal -->
+                    ${state.showSettings ? `
+                        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div class="${colors.secondary} p-6 rounded-lg shadow-2xl w-full max-w-md border ${colors.border}">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h2 class="text-xl font-bold">Settings</h2>
+                                    <button id="close-settings">${icons.x}</button>
+                                </div>
+                                <div class="space-y-4">
+                                    <!-- Theme Toggle -->
+                                    <div class="flex items-center justify-between">
+                                        <span>Theme</span>
+                                        <button id="toggle-theme" class="flex items-center gap-2 p-2 ${colors.tertiary} rounded">
+                                            ${state.theme === 'dark' ? icons.moon : icons.sun}
+                                            ${state.theme === 'dark' ? 'Dark' : 'Light'}
+                                        </button>
+                                    </div>
+
+                                    <!-- Avatar Update -->
+                                    <div>
+                                        <label class="block mb-2">Change Avatar</label>
+                                        <div class="flex gap-2">
+                                            <input type="url" id="new-avatar-url" placeholder="Enter new avatar URL" value="${state.newAvatarUrl}"
+                                                class="flex-1 p-2 ${colors.tertiary} rounded border ${colors.border} focus:outline-none">
+                                            <button id="update-avatar" class="${colors.accentBg} text-white px-4 rounded hover:opacity-90">Update</button>
+                                        </div>
+                                        <p class="text-xs ${colors.textSecondary} mt-1">Use Imgur, ImgBB, or any direct image URL</p>
+                                    </div>
+
+                                    <!-- Blocked Users -->
+                                    ${state.blockedUsers.length > 0 ? `
+                                        <div>
+                                            <h3 class="font-semibold mb-2">Blocked Users</h3>
+                                            ${state.blockedUsers.map(uid => {
+                                                const user = state.allUsers.find(u => u.uid === uid);
+                                                return user ? `
+                                                    <div class="flex items-center justify-between p-2 ${colors.tertiary} rounded mb-2">
+                                                        <span>${user.username}</span>
+                                                        <button onclick="window.unblockFriend('${uid}')" class="text-sm bg-green-600 px-3 py-1 rounded hover:bg-green-700">Unblock</button>
+                                                    </div>
+                                                ` : '';
+                                            }).join('')}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            // Event listeners for main view
+            document.getElementById('logout-btn').onclick = handleLogout;
+            document.getElementById('settings-btn').onclick = () => {
+                state.showSettings = !state.showSettings;
+                render();
+            };
+
+            if (state.showSettings) {
+                document.getElementById('close-settings').onclick = () => {
+                    state.showSettings = false;
+                    render();
+                };
+                document.getElementById('toggle-theme').onclick = toggleTheme;
+                document.getElementById('new-avatar-url').oninput = (e) => state.newAvatarUrl = e.target.value;
+                document.getElementById('update-avatar').onclick = updateAvatar;
+            }
+
+            document.getElementById('friend-request-input').oninput = (e) => state.friendRequestInput = e.target.value;
+            document.getElementById('friend-request-input').onkeypress = (e) => {
+                if (e.key === 'Enter') sendFriendRequest();
+            };
+            document.getElementById('send-friend-request').onclick = sendFriendRequest;
+
+            if (state.selectedFriend) {
+                document.getElementById('message-input').oninput = (e) => state.messageInput = e.target.value;
+                document.getElementById('message-input').onkeypress = (e) => {
+                    if (e.key === 'Enter') sendMessage();
+                };
+                document.getElementById('send-message-btn').onclick = sendMessage;
+                document.getElementById('image-url-input').oninput = (e) => state.imageUrlInput = e.target.value;
+                document.getElementById('image-url-input').onkeypress = (e) => {
+                    if (e.key === 'Enter') sendImage();
+                };
+                document.getElementById('send-image-btn').onclick = sendImage;
+            }
+        }
+
+        // Global functions for inline handlers
+        window.acceptRequest = async (fromUid) => {
+            await acceptFriendRequest({ fromUid });
+        };
+
+        window.declineRequest = async (fromUid) => {
+            await declineFriendRequest({ fromUid });
+        };
+
+        window.selectFriend = (friendUid) => {
+            const friend = state.friends.find(f => f.uid === friendUid);
+            if (friend) selectFriend(friend);
+        };
+
+        window.blockFriend = async (friendUid) => {
+            await blockUser(friendUid);
+        };
+
+        window.unblockFriend = async (friendUid) => {
+            await unblockUser(friendUid);
+        };
+
+        // Initial render
+        render();
+    </script>
+</body>
+</html>
