@@ -107,13 +107,29 @@
                     state.theme = state.currentUser.theme || 'dark';
                     render();
                     setupListeners();
+                } else {
+                    // This could happen if a user is created in Auth but not in RTDB (e.g., failed signup midway)
+                    // You might want to log this or force sign out.
+                    console.warn("Auth user found but no corresponding user data in Realtime Database.");
+                    await signOut(auth); // Force sign out to prevent broken state
                 }
             } else {
                 state.currentUser = null;
                 state.view = 'auth';
                 render();
+                // Clear any ongoing listeners when logging out
+                off(ref(database, `friendRequests/${state.currentUser?.uid}`)); // Added optional chaining for safety
+                off(ref(database, `users/${state.currentUser?.uid}/friends`));
+                off(ref(database, `users/${state.currentUser?.uid}/blocked`));
+                off(ref(database, 'users'));
+                // Make sure message listener is also cleared if active
+                if (state.selectedFriend) {
+                    const chatId = [state.currentUser?.uid, state.selectedFriend?.uid].sort().join('_');
+                    off(ref(database, `messages/${chatId}`));
+                }
             }
         });
+
 
         function setupListeners() {
             if (!state.currentUser) return;
@@ -133,15 +149,20 @@
             onValue(friendsRef, async (snapshot) => {
                 state.friends = [];
                 const promises = [];
-                snapshot.forEach((child) => {
+                // Collect UIDs of friends
+                const friendUids = [];
+                snapshot.forEach((child) => friendUids.push(child.key));
+
+                // Fetch friend data concurrently
+                for (const uid of friendUids) {
                     promises.push(
-                        get(ref(database, `users/${child.key}`)).then((friendSnapshot) => {
+                        get(ref(database, `users/${uid}`)).then((friendSnapshot) => {
                             if (friendSnapshot.exists()) {
-                                state.friends.push({ uid: child.key, ...friendSnapshot.val() });
+                                state.friends.push({ uid: uid, ...friendSnapshot.val() });
                             }
                         })
                     );
-                });
+                }
                 await Promise.all(promises);
                 render();
             });
@@ -156,7 +177,7 @@
                 render();
             });
 
-            // All users
+            // All users (for friend requests lookup)
             const usersRef = ref(database, 'users');
             onValue(usersRef, (snapshot) => {
                 state.allUsers = [];
@@ -168,7 +189,13 @@
 
         function setupMessageListener() {
             if (!state.currentUser || !state.selectedFriend) return;
+            // First, clear any existing message listener for the previous chat
+            if (state.currentChatId) {
+                off(ref(database, `messages/${state.currentChatId}`));
+            }
+
             const chatId = [state.currentUser.uid, state.selectedFriend.uid].sort().join('_');
+            state.currentChatId = chatId; // Store the current chat ID to manage listeners
             const messagesRef = ref(database, `messages/${chatId}`);
             
             onValue(messagesRef, (snapshot) => {
@@ -189,37 +216,55 @@
             e.preventDefault();
             state.error = '';
 
-            if (!state.username || !state.password) {
+            // Read values directly from the DOM elements and trim them
+            const usernameInput = document.getElementById('username');
+            const passwordInput = document.getElementById('password');
+            const avatarUrlInput = document.getElementById('avatar-url'); 
+
+            const username = usernameInput ? usernameInput.value.trim() : '';
+            const password = passwordInput ? passwordInput.value.trim() : '';
+            const avatarUrl = (state.authMode === 'signup' && avatarUrlInput) ? avatarUrlInput.value.trim() : '';
+
+            // Update state with these fresh, trimmed values for rendering consistency
+            state.username = username;
+            state.password = password;
+            if (state.authMode === 'signup') {
+                state.avatarUrl = avatarUrl;
+            }
+
+            if (!username || !password) {
                 state.error = 'Please fill in all fields';
                 render();
                 return;
             }
 
-            const email = `${state.username.toLowerCase()}@messaging.app`;
+            const email = `${username.toLowerCase()}@messaging.app`; // Use the trimmed username
 
             try {
                 if (state.authMode === 'signup') {
-                    const userCredential = await createUserWithEmailAndPassword(auth, email, state.password);
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                     const user = userCredential.user;
 
                     const usersSnapshot = await get(ref(database, 'users'));
                     let usernameExists = false;
+                    // Check if username exists globally, case-insensitively
                     usersSnapshot.forEach((child) => {
-                        if (child.val().username === state.username) {
+                        if (child.val().username && child.val().username.toLowerCase() === username.toLowerCase()) {
                             usernameExists = true;
                         }
                     });
 
                     if (usernameExists) {
+                        // If username is taken, delete the newly created auth user and show error
                         await user.delete();
-                        state.error = 'Username already taken';
+                        state.error = 'Username already taken. Please choose a different one.';
                         render();
                         return;
                     }
 
                     await set(ref(database, `users/${user.uid}`), {
-                        username: state.username,
-                        avatar: state.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${state.username}`,
+                        username: username, // Use the trimmed username
+                        avatar: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
                         theme: 'dark',
                         createdAt: Date.now()
                     });
@@ -227,13 +272,13 @@
                     state.username = '';
                     state.password = '';
                     state.avatarUrl = '';
-                } else {
-                    await signInWithEmailAndPassword(auth, email, state.password);
+                } else { // Login mode
+                    await signInWithEmailAndPassword(auth, email, password);
                     state.username = '';
                     state.password = '';
                 }
             } catch (err) {
-                if (err.code === 'auth/email-already-in-use') {
+                if (err.code === 'auth/email-already-in-use') { // This specific Firebase error typically means username already exists (for signup)
                     state.error = 'Username already exists';
                 } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
                     state.error = 'Invalid username or password';
@@ -251,12 +296,22 @@
             state.view = 'auth';
             state.selectedFriend = null;
             state.messages = [];
+            // Additional cleanup for listeners upon logout to prevent memory leaks
+            off(ref(database, `friendRequests/${state.currentUser?.uid}`));
+            off(ref(database, `users/${state.currentUser?.uid}/friends`));
+            off(ref(database, `users/${state.currentUser?.uid}/blocked`));
+            off(ref(database, 'users'));
+            if (state.currentChatId) {
+                off(ref(database, `messages/${state.currentChatId}`));
+                state.currentChatId = null;
+            }
         }
 
         async function sendFriendRequest() {
-            if (!state.friendRequestInput.trim()) return;
+            const trimmedRequest = state.friendRequestInput.trim();
+            if (!trimmedRequest) return;
 
-            const targetUser = state.allUsers.find(u => u.username === state.friendRequestInput && u.uid !== state.currentUser.uid);
+            const targetUser = state.allUsers.find(u => u.username.toLowerCase() === trimmedRequest.toLowerCase() && u.uid !== state.currentUser.uid);
 
             if (!targetUser) {
                 state.error = 'User not found';
@@ -271,7 +326,15 @@
             }
 
             if (state.blockedUsers.includes(targetUser.uid)) {
-                state.error = 'You have blocked this user';
+                state.error = 'You have blocked this user'; // Or "This user is blocked by you"
+                render();
+                return;
+            }
+            
+            // Check if *target user* has blocked *current user*
+            const targetBlockedListRef = await get(ref(database, `users/${targetUser.uid}/blocked/${state.currentUser.uid}`));
+            if (targetBlockedListRef.exists()) {
+                state.error = 'This user has blocked you and cannot receive requests.';
                 render();
                 return;
             }
@@ -290,7 +353,7 @@
             });
 
             state.friendRequestInput = '';
-            state.error = '';
+            state.error = ''; // Clear error on success
             render();
         }
 
@@ -306,27 +369,38 @@
 
         async function blockUser(friendUid) {
             await set(ref(database, `users/${state.currentUser.uid}/blocked/${friendUid}`), true);
+            // Also remove from friends list if they were friends
             await remove(ref(database, `users/${state.currentUser.uid}/friends/${friendUid}`));
             await remove(ref(database, `users/${friendUid}/friends/${state.currentUser.uid}`));
+            
+            // Unsubscribe from message listener if chat was open
+            if (state.currentChatId) {
+                off(ref(database, `messages/${state.currentChatId}`));
+                state.currentChatId = null;
+            }
+
             if (state.selectedFriend?.uid === friendUid) {
                 state.selectedFriend = null;
+                state.messages = [];
             }
             render();
         }
 
         async function unblockUser(friendUid) {
             await remove(ref(database, `users/${state.currentUser.uid}/blocked/${friendUid}`));
+            render(); // Rerender to update settings modal
         }
 
         async function sendMessage() {
-            if (!state.messageInput.trim() || !state.selectedFriend) return;
+            const trimmedMessage = state.messageInput.trim();
+            if (!trimmedMessage || !state.selectedFriend) return;
 
             const chatId = [state.currentUser.uid, state.selectedFriend.uid].sort().join('_');
             const messagesRef = ref(database, `messages/${chatId}`);
             const newMessageRef = push(messagesRef);
 
             await set(newMessageRef, {
-                text: state.messageInput,
+                text: trimmedMessage,
                 senderId: state.currentUser.uid,
                 senderName: state.currentUser.username,
                 timestamp: Date.now(),
@@ -338,14 +412,15 @@
         }
 
         async function sendImage() {
-            if (!state.imageUrlInput.trim() || !state.selectedFriend) return;
+            const trimmedImageUrl = state.imageUrlInput.trim();
+            if (!trimmedImageUrl || !state.selectedFriend) return;
 
             const chatId = [state.currentUser.uid, state.selectedFriend.uid].sort().join('_');
             const messagesRef = ref(database, `messages/${chatId}`);
             const newMessageRef = push(messagesRef);
 
             await set(newMessageRef, {
-                imageUrl: state.imageUrlInput,
+                imageUrl: trimmedImageUrl,
                 senderId: state.currentUser.uid,
                 senderName: state.currentUser.username,
                 timestamp: Date.now(),
@@ -357,13 +432,14 @@
         }
 
         async function updateAvatar() {
-            if (!state.newAvatarUrl.trim()) return;
+            const trimmedNewAvatarUrl = state.newAvatarUrl.trim();
+            if (!trimmedNewAvatarUrl) return;
 
             await update(ref(database, `users/${state.currentUser.uid}`), {
-                avatar: state.newAvatarUrl
+                avatar: trimmedNewAvatarUrl
             });
 
-            state.currentUser.avatar = state.newAvatarUrl;
+            state.currentUser.avatar = trimmedNewAvatarUrl;
             state.newAvatarUrl = '';
             render();
         }
@@ -378,10 +454,17 @@
         }
 
         function selectFriend(friend) {
+            // Unsubscribe from previous chat listener if one was active
+            if (state.currentChatId && state.selectedFriend && state.selectedFriend.uid !== friend.uid) {
+                const prevChatId = [state.currentUser.uid, state.selectedFriend.uid].sort().join('_');
+                off(ref(database, `messages/${prevChatId}`));
+            }
+
             state.selectedFriend = friend;
             state.messages = [];
+            state.error = ''; // Clear any friend request error
             render();
-            setupMessageListener();
+            setupMessageListener(); // Setup listener for the new selected chat
         }
 
         function render() {
@@ -420,6 +503,7 @@
                 `;
 
                 document.getElementById('auth-form').onsubmit = handleAuth;
+                // Keep oninput handlers for reactive updates to the state for rendering purposes (like pre-filling fields when toggling auth mode)
                 document.getElementById('username').oninput = (e) => state.username = e.target.value;
                 document.getElementById('password').oninput = (e) => state.password = e.target.value;
                 if (state.authMode === 'signup') {
@@ -427,7 +511,7 @@
                 }
                 document.getElementById('toggle-auth').onclick = () => {
                     state.authMode = state.authMode === 'login' ? 'signup' : 'login';
-                    state.error = '';
+                    state.error = ''; // Clear error when switching modes
                     render();
                 };
 
@@ -616,19 +700,28 @@
 
             document.getElementById('friend-request-input').oninput = (e) => state.friendRequestInput = e.target.value;
             document.getElementById('friend-request-input').onkeypress = (e) => {
-                if (e.key === 'Enter') sendFriendRequest();
+                if (e.key === 'Enter') {
+                    e.preventDefault(); // Prevent form submission
+                    sendFriendRequest();
+                }
             };
             document.getElementById('send-friend-request').onclick = sendFriendRequest;
 
             if (state.selectedFriend) {
                 document.getElementById('message-input').oninput = (e) => state.messageInput = e.target.value;
                 document.getElementById('message-input').onkeypress = (e) => {
-                    if (e.key === 'Enter') sendMessage();
+                    if (e.key === 'Enter') {
+                        e.preventDefault(); // Prevent form submission
+                        sendMessage();
+                    }
                 };
                 document.getElementById('send-message-btn').onclick = sendMessage;
                 document.getElementById('image-url-input').oninput = (e) => state.imageUrlInput = e.target.value;
                 document.getElementById('image-url-input').onkeypress = (e) => {
-                    if (e.key === 'Enter') sendImage();
+                    if (e.key === 'Enter') {
+                        e.preventDefault(); // Prevent form submission
+                        sendImage();
+                    }
                 };
                 document.getElementById('send-image-btn').onclick = sendImage;
             }
