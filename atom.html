@@ -3,23 +3,659 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Atom Messenger</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Atom Messenger - Complete</title>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: system-ui, -apple-system, sans-serif; }
-        .spinner { border: 3px solid rgba(96, 165, 250, 0.3); border-top-color: #06b6d4; border-radius: 50%; width: 48px; height: 48px; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-light: #818cf8;
+            --bg: #f9fafb;
+            --bg-secondary: #f3f4f6;
+            --text: #111827;
+            --text-secondary: #6b7280;
+            --card: #ffffff;
+            --border: #e5e7eb;
+            --msg-sent: #6366f1;
+            --msg-received: #e5e7eb;
+            --msg-received-text: #111827;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --online: #10b981;
+            --offline: #9ca3af;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+            --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .dark-theme {
+            --primary: #818cf8;
+            --primary-hover: #6366f1;
+            --primary-light: #a5b4fc;
+            --bg: #0f172a;
+            --bg-secondary: #1e293b;
+            --text: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --card: #1e293b;
+            --border: #334155;
+            --msg-received: #334155;
+            --msg-received-text: #f1f5f9;
+            --offline: #64748b;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+            --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg);
+            color: var(--text);
+            transition: all 0.3s;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        /* Chat layout */
+        .chat-layout {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            background: var(--bg);
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 320px;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            background: var(--card);
+            height: 100vh;
+        }
+        
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background-color: var(--bg-secondary);
+        }
+        
+        .sidebar-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .user-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 0;
+        }
+        
+        .user-item {
+            padding: 12px 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+        
+        .user-item:hover {
+            background-color: var(--bg-secondary);
+            border-left-color: var(--primary);
+        }
+        
+        .user-item.active {
+            background-color: var(--bg-secondary);
+            border-left-color: var(--primary);
+        }
+        
+        .avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-weight: 600;
+            overflow: hidden;
+            position: relative;
+            box-shadow: var(--shadow);
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+        
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .group-member-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid var(--border);
+            flex-shrink: 0;
+            text-overflow: ellipsis;
+            overflow: hidden;
+        }
+
+        .group-member-avatar:hover {
+            border-color: var(--primary);
+            transform: scale(1.05);
+        }
+        
+        .user-info {
+            flex: 1;
+        }
+        
+        .user-name {
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+        
+        .user-status {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .status-online {
+            color: var(--online);
+        }
+        
+        /* Chat area */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-secondary);
+            overflow: hidden;
+        }
+        
+        .chat-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background-color: var(--card);
+            box-shadow: var(--shadow-sm);
+            z-index: 10;
+        }
+        
+        .messages-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: var(--bg-secondary);
+        }
+        
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-height: 0;
+        }
+        
+        .message {
+            display: flex;
+            flex-direction: column;
+            max-width: 65%;
+            animation: slideIn 0.2s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message.sent {
+            align-self: flex-end;
+            align-items: flex-end;
+        }
+        
+        .message.received {
+            align-self: flex-start;
+            align-items: flex-start;
+        }
+        
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 16px;
+            word-wrap: break-word;
+            line-height: 1.4;
+            position: relative;
+        }
+        
+        .message.sent .message-bubble {
+            background: linear-gradient(135deg, var(--msg-sent) 0%, var(--primary-light) 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .message.received .message-bubble {
+            background-color: var(--msg-received);
+            color: var(--msg-received-text);
+            border-bottom-left-radius: 4px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+        
+        .message-image {
+            max-width: 100%;
+            width: auto;
+            max-height: 300px;
+            height: auto;
+            border-radius: 12px;
+            cursor: pointer;
+            display: block;
+            border: 1px solid var(--border);
+            object-fit: contain;
+        }
+        
+        .message-image:hover {
+            transform: scale(1.02);
+        }
+        
+        .message.sent .message-image {
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .message.received .message-image {
+            border: 2px solid var(--border);
+        }
+        
+        .message-sender {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        
+        .message-time {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            text-align: right;
+        }
+        
+        .chat-input-container {
+            padding: 20px;
+            border-top: 1px solid var(--border);
+            background-color: var(--card);
+            position: relative;
+            z-index: 5;
+        }
+        
+        .chat-form {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid var(--border);
+            border-radius: 24px;
+            font-size: 15px;
+            resize: none;
+            outline: none;
+            background: var(--bg-secondary);
+            color: var(--text);
+            transition: all 0.2s;
+            max-height: 120px;
+            min-height: 48px;
+        }
+        
+        .message-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+            background: var(--card);
+        }
+        
+        .input-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .icon-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: none;
+            background: var(--bg-secondary);
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 20px;
+        }
+        
+        .icon-btn:hover {
+            background: var(--border);
+            transform: scale(1.05);
+        }
+        
+        .icon-btn.primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+        }
+        
+        .icon-btn.primary:hover {
+            transform: scale(1.1);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .image-input {
+            display: none;
+        }
+        
+        .image-preview-container {
+            padding: 10px 20px;
+            border-top: 1px solid var(--border);
+            background: var(--bg-secondary);
+            display: none;
+            position: relative;
+            z-index: 5;
+        }
+        
+        .image-preview-container.active {
+            display: block;
+        }
+        
+        .image-preview {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .image-preview img {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 12px;
+            border: 2px solid var(--border);
+        }
+        
+        .remove-image {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--danger);
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        /* Login/Signup forms */
+        .auth-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            background: var(--bg-secondary);
+        }
+        
+        .auth-card {
+            max-width: 420px;
+            width: 100%;
+            padding: 40px;
+            background: var(--card);
+            border-radius: 16px;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border);
+        }
+        
+        .auth-title {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            color: var(--text);
+        }
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 15px;
+            background: var(--bg-secondary);
+            color: var(--text);
+            transition: all 0.2s;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+            background: var(--card);
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            text-align: center;
+            transition: all 0.2s;
+            box-shadow: var(--shadow);
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        .btn-block {
+            display: block;
+            width: 100%;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary) 100%);
+        }
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 13px;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        .error-message {
+            color: var(--danger);
+            margin-top: 10px;
+            font-size: 14px;
+            padding: 10px;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 6px;
+        }
+        .auth-toggle {
+            margin-top: 20px;
+            font-size: 14px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+        .auth-toggle button {
+            background: none;
+            border: none;
+            color: var(--primary);
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 600;
+            padding: 0;
+        }
+        .auth-toggle button:hover {
+            text-decoration: underline;
+        }
+        
+        /* Tabs */
+        .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--card); }
+        .tab { flex: 1; padding: 14px; text-align: center; cursor: pointer; font-weight: 600; opacity: 0.5; border-bottom: 3px solid transparent; transition: all 0.2s; font-size: 14px; color: var(--text); }
+        .tab:hover { opacity: 0.8; background: var(--bg-secondary); }
+        .tab.active { opacity: 1; border-bottom-color: var(--primary); color: var(--primary); }
+        .tab-content { display: none; flex: 1; overflow-y: auto; min-height: 0; }
+        .tab-content.active { display: block; }
+        /* Admin tabs */
+        .admin-tab { flex: 1; padding: 10px; text-align: center; cursor: pointer; font-weight: 600; opacity: 0.5; border-bottom: 3px solid transparent; transition: all 0.2s; font-size: 13px; color: var(--text); background: var(--bg-secondary); border-radius: 8px 8px 0 0; margin: 0 2px; }
+        .admin-tab:hover { opacity: 0.8; background: var(--card); }
+        .admin-tab.active { opacity: 1; border-bottom-color: var(--primary); color: var(--primary); background: var(--card); }
+        
+        /* Search */
+        .search { padding: 15px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); }
+        .search-form { display: flex; gap: 8px; }
+        .search-input { flex: 1; padding: 10px 16px; border: 2px solid var(--border); border-radius: 24px; background: var(--card); color: var(--text); outline: none; font-size: 14px; transition: all 0.2s; }
+        .search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); }
+        
+        /* Empty state */
+        .empty { padding: 60px 20px; text-align: center; color: var(--text-secondary); }
+        .empty-icon { font-size: 64px; margin-bottom: 16px; opacity: 0.5; }
+        .empty p { font-size: 15px; }
+        
+        /* Modal */
+        .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); display: none; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--card); border-radius: 16px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; border: 1px solid var(--border); box-shadow: var(--shadow-lg); }
+        .modal-header { padding: 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg-secondary); border-radius: 16px 16px 0 0; }
+        .modal-title { font-size: 1.3rem; font-weight: 700; color: var(--text); }
+        .modal-close { background: var(--bg-secondary); border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); width: 32px; height: 32px; border-radius: 8px; transition: all 0.2s; }
+        .modal-close:hover { background: var(--border); color: var(--text); }
+        .modal-body { padding: 24px; }
+        
+        /* Profile */
+        .profile-view { text-align: center; }
+        .profile-avatar { width: 80px; height: 80px; margin: 0 auto 20px; font-size: 2rem; overflow: hidden; box-shadow: var(--shadow-md); border-radius: 50%; }
+        .profile-name { font-size: 1.5rem; font-weight: 700; margin-bottom: 5px; color: var(--text); }
+        .profile-username { color: var(--text-secondary); margin-bottom: 20px; font-size: 14px; }
+        .profile-bio { padding: 16px; background: var(--bg-secondary); border-radius: 12px; margin-bottom: 20px; text-align: left; font-size: 14px; color: var(--text); border: 1px solid var(--border); }
+        .profile-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        
+        /* Avatar Upload */
+        .avatar-upload-container { text-align: center; margin-bottom: 24px; }
+        .avatar-preview { width: 130px; height: 130px; margin: 0 auto 20px; border-radius: 50%; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); color: white; display: flex; align-items: center; justify-content: center; font-size: 3.5rem; font-weight: 700; overflow: hidden; border: 4px solid var(--border); box-shadow: var(--shadow-lg); }
+        .avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
+        .avatar-upload-btn { display: inline-block; padding: 10px 20px; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); color: white; border-radius: 24px; cursor: pointer; font-size: 14px; font-weight: 600; box-shadow: var(--shadow); transition: all 0.2s; }
+        .avatar-upload-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+        .avatar-upload-input { display: none; }
+        .avatar-options { display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+        .avatar-option { padding: 8px 16px; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; background: var(--card); color: var(--text); transition: all 0.2s; font-weight: 500; }
+        .avatar-option:hover { background: var(--bg-secondary); border-color: var(--primary); color: var(--primary); transform: translateY(-1px); }
+        
+        /* Checkbox */
+        .checkbox-list { max-height: 300px; overflow-y: auto; border: 2px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 15px; background: var(--bg-secondary); }
+        .checkbox-item { display: flex; align-items: center; padding: 10px; gap: 12px; cursor: pointer; border-radius: 8px; transition: all 0.2s; }
+        .checkbox-item:hover { background: var(--card); }
+        .checkbox-item input { width: 20px; height: 20px; cursor: pointer; accent-color: var(--primary); }
+        .checkbox-item label { cursor: pointer; color: var(--text); font-size: 14px; }
+        
+        /* Badge */
+        .badge { background: var(--danger); color: white; border-radius: 12px; padding: 3px 8px; font-size: 11px; font-weight: 700; margin-left: 6px; box-shadow: var(--shadow-sm); }
+        
+        /* Textarea */
+        textarea.form-control { min-height: 100px; resize: vertical; font-family: inherit; line-height: 1.5; }
+        
+        /* List items */
+        .list-item { display: flex; align-items: center; padding: 12px 15px; gap: 12px; cursor: pointer; border-bottom: 1px solid var(--border); transition: all 0.2s; border-left: 3px solid transparent; }
+        .list-item:hover { background-color: var(--bg-secondary); border-left-color: var(--primary); }
+        .list-item.active { background-color: var(--bg-secondary); border-left-color: var(--primary); }
+        .item-info { flex: 1; overflow: hidden; }
+        .item-actions { display: flex; gap: 6px; }
+        .item-title { font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; color: var(--text); }
+        .item-subtitle { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+        
+        /* Welcome screen */
+        .welcome-title { font-size: 1.8rem; font-weight: 700; color: var(--text); margin-bottom: 12px; }
+        .welcome-text { color: var(--text-secondary); font-size: 15px; line-height: 1.6; }
+        .welcome-icon { opacity: 0.6; }
     </style>
 </head>
 <body>
     <div id="app"></div>
 
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getDatabase, ref, set, push, onValue, update, remove, get, off } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
-
+    <script>
+        // Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyA8dNOz8EL6vlUK7GGSRXQaBLXoJgxDT4s",
             authDomain: "atom-messenger-e4a26.firebaseapp.com",
@@ -27,727 +663,2072 @@
             projectId: "atom-messenger-e4a26",
             storageBucket: "atom-messenger-e4a26.firebasestorage.app",
             messagingSenderId: "637158834551",
-            appId: "1:637158834551:web:2e9562d345bb488982e172",
-            measurementId: "G-TH8NYZJBRM"
+            appId: "1:637158834551:web:2e9562d345bb488982e172"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const database = getDatabase(app);
+        // Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
 
-        let state = {
-            currentUser: null,
-            view: 'auth',
-            authMode: 'login',
-            username: '',
-            password: '',
-            avatarUrl: '',
-            friendRequests: [],
-            friends: [],
-            blockedUsers: [],
-            messages: [],
-            selectedFriend: null,
-            messageInput: '',
-            friendRequestInput: '',
-            imageUrlInput: '',
-            newAvatarUrl: '',
-            showSettings: false,
-            theme: 'dark',
-            error: '',
-            allUsers: []
-        };
-
-        const icons = {
-            users: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
-            send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>',
-            userPlus: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>',
-            settings: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v6m0 6v6m8.66-15.66l-4.24 4.24m-8.48 8.48l-4.24 4.24m16.97-4.24l-4.24-4.24m-8.48-8.48l-4.24-4.24"></path></svg>',
-            logout: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>',
-            x: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
-            check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>',
-            ban: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>',
-            moon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>',
-            sun: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>',
-            image: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>'
-        };
-
-        const themes = {
-            dark: {
-                bg: 'bg-black',
-                secondary: 'bg-gray-900',
-                tertiary: 'bg-gray-800',
-                text: 'text-white',
-                textSecondary: 'text-gray-300',
-                accent: 'text-cyan-400',
-                accentBg: 'bg-cyan-400',
-                border: 'border-gray-700',
-                hover: 'hover:bg-gray-800'
-            },
-            light: {
-                bg: 'bg-white',
-                secondary: 'bg-gray-50',
-                tertiary: 'bg-gray-100',
-                text: 'text-gray-900',
-                textSecondary: 'text-gray-600',
-                accent: 'text-purple-600',
-                accentBg: 'bg-purple-600',
-                border: 'border-gray-300',
-                hover: 'hover:bg-gray-100'
-            }
-        };
-
-        // Auth listener
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                const userRef = ref(database, `users/${user.uid}`);
-                const snapshot = await get(userRef);
-                if (snapshot.exists()) {
-                    state.currentUser = { ...snapshot.val(), uid: user.uid };
-                    state.view = 'main';
-                    state.theme = state.currentUser.theme || 'dark';
-                    render();
-                    setupListeners();
-                } else {
-                    // This could happen if a user is created in Auth but not in RTDB (e.g., failed signup midway)
-                    // You might want to log this or force sign out.
-                    console.warn("Auth user found but no corresponding user data in Realtime Database.");
-                    await signOut(auth); // Force sign out to prevent broken state
-                }
+        // Test Firebase connection
+        db.ref('.info/connected').on('value', (snap) => {
+            if (snap.val() === true) {
+                console.log('Firebase connected successfully');
             } else {
-                state.currentUser = null;
-                state.view = 'auth';
-                render();
-                // Clear any ongoing listeners when logging out
-                off(ref(database, `friendRequests/${state.currentUser?.uid}`)); // Added optional chaining for safety
-                off(ref(database, `users/${state.currentUser?.uid}/friends`));
-                off(ref(database, `users/${state.currentUser?.uid}/blocked`));
-                off(ref(database, 'users'));
-                // Make sure message listener is also cleared if active
-                if (state.selectedFriend) {
-                    const chatId = [state.currentUser?.uid, state.selectedFriend?.uid].sort().join('_');
-                    off(ref(database, `messages/${chatId}`));
-                }
+                console.log('Firebase not connected');
             }
         });
 
+        // Listen for Firebase errors
+        db.ref('.info/serverTimeOffset').on('value', () => {
+            console.log('Firebase database accessible');
+        });
 
-        function setupListeners() {
-            if (!state.currentUser) return;
+        // App state
+        let currentUser = null;
+        let userProfile = null;
+        let allUsers = {};
+        let friends = [];
+        let groups = [];
+        let friendRequests = [];
+        let messages = {};
+        let activeChat = null;
+        let activeChatType = null; // 'friend' or 'group'
+        let activeTab = 'friends';
+        let theme = localStorage.getItem('atom-theme') || 'light';
+        let isLoginView = true;
 
-            // Friend requests
-            const requestsRef = ref(database, `friendRequests/${state.currentUser.uid}`);
-            onValue(requestsRef, (snapshot) => {
-                state.friendRequests = [];
-                snapshot.forEach((child) => {
-                    state.friendRequests.push({ id: child.key, ...child.val() });
-                });
-                render();
-            });
+        // Apply theme
+        if (theme === 'dark') document.body.classList.add('dark-theme');
 
-            // Friends
-            const friendsRef = ref(database, `users/${state.currentUser.uid}/friends`);
-            onValue(friendsRef, async (snapshot) => {
-                state.friends = [];
-                const promises = [];
-                // Collect UIDs of friends
-                const friendUids = [];
-                snapshot.forEach((child) => friendUids.push(child.key));
-
-                // Fetch friend data concurrently
-                for (const uid of friendUids) {
-                    promises.push(
-                        get(ref(database, `users/${uid}`)).then((friendSnapshot) => {
-                            if (friendSnapshot.exists()) {
-                                state.friends.push({ uid: uid, ...friendSnapshot.val() });
-                            }
-                        })
-                    );
-                }
-                await Promise.all(promises);
-                render();
-            });
-
-            // Blocked users
-            const blockedRef = ref(database, `users/${state.currentUser.uid}/blocked`);
-            onValue(blockedRef, (snapshot) => {
-                state.blockedUsers = [];
-                snapshot.forEach((child) => {
-                    state.blockedUsers.push(child.key);
-                });
-                render();
-            });
-
-            // All users (for friend requests lookup)
-            const usersRef = ref(database, 'users');
-            onValue(usersRef, (snapshot) => {
-                state.allUsers = [];
-                snapshot.forEach((child) => {
-                    state.allUsers.push({ uid: child.key, ...child.val() });
-                });
-            });
-        }
-
-        function setupMessageListener() {
-            if (!state.currentUser || !state.selectedFriend) return;
-            // First, clear any existing message listener for the previous chat
-            if (state.currentChatId) {
-                off(ref(database, `messages/${state.currentChatId}`));
-            }
-
-            const chatId = [state.currentUser.uid, state.selectedFriend.uid].sort().join('_');
-            state.currentChatId = chatId; // Store the current chat ID to manage listeners
-            const messagesRef = ref(database, `messages/${chatId}`);
-            
-            onValue(messagesRef, (snapshot) => {
-                state.messages = [];
-                snapshot.forEach((child) => {
-                    state.messages.push({ id: child.key, ...child.val() });
-                });
-                state.messages.sort((a, b) => a.timestamp - b.timestamp);
-                render();
-                setTimeout(() => {
-                    const msgContainer = document.getElementById('messages-container');
-                    if (msgContainer) msgContainer.scrollTop = msgContainer.scrollHeight;
-                }, 100);
-            });
-        }
-
-        async function handleAuth(e) {
-            e.preventDefault();
-            state.error = '';
-
-            // Read values directly from the DOM elements and trim them
-            const usernameInput = document.getElementById('username');
-            const passwordInput = document.getElementById('password');
-            const avatarUrlInput = document.getElementById('avatar-url'); 
-
-            const username = usernameInput ? usernameInput.value.trim() : '';
-            const password = passwordInput ? passwordInput.value.trim() : '';
-            const avatarUrl = (state.authMode === 'signup' && avatarUrlInput) ? avatarUrlInput.value.trim() : '';
-
-            // Update state with these fresh, trimmed values for rendering consistency
-            state.username = username;
-            state.password = password;
-            if (state.authMode === 'signup') {
-                state.avatarUrl = avatarUrl;
-            }
-
-            if (!username || !password) {
-                state.error = 'Please fill in all fields';
-                render();
-                return;
-            }
-
-            const email = `${username.toLowerCase()}@messaging.app`; // Use the trimmed username
-
-            try {
-                if (state.authMode === 'signup') {
-                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                    const user = userCredential.user;
-
-                    const usersSnapshot = await get(ref(database, 'users'));
-                    let usernameExists = false;
-                    // Check if username exists globally, case-insensitively
-                    usersSnapshot.forEach((child) => {
-                        if (child.val().username && child.val().username.toLowerCase() === username.toLowerCase()) {
-                            usernameExists = true;
-                        }
-                    });
-
-                    if (usernameExists) {
-                        // If username is taken, delete the newly created auth user and show error
-                        await user.delete();
-                        state.error = 'Username already taken. Please choose a different one.';
-                        render();
-                        return;
-                    }
-
-                    await set(ref(database, `users/${user.uid}`), {
-                        username: username, // Use the trimmed username
-                        avatar: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
-                        theme: 'dark',
-                        createdAt: Date.now()
-                    });
-
-                    state.username = '';
-                    state.password = '';
-                    state.avatarUrl = '';
-                } else { // Login mode
-                    await signInWithEmailAndPassword(auth, email, password);
-                    state.username = '';
-                    state.password = '';
-                }
-            } catch (err) {
-                if (err.code === 'auth/email-already-in-use') { // This specific Firebase error typically means username already exists (for signup)
-                    state.error = 'Username already exists';
-                } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-                    state.error = 'Invalid username or password';
-                } else if (err.code === 'auth/weak-password') {
-                    state.error = 'Password should be at least 6 characters';
-                } else {
-                    state.error = err.message;
-                }
-                render();
-            }
-        }
-
-        async function handleLogout() {
-            await signOut(auth);
-            state.view = 'auth';
-            state.selectedFriend = null;
-            state.messages = [];
-            // Additional cleanup for listeners upon logout to prevent memory leaks
-            off(ref(database, `friendRequests/${state.currentUser?.uid}`));
-            off(ref(database, `users/${state.currentUser?.uid}/friends`));
-            off(ref(database, `users/${state.currentUser?.uid}/blocked`));
-            off(ref(database, 'users'));
-            if (state.currentChatId) {
-                off(ref(database, `messages/${state.currentChatId}`));
-                state.currentChatId = null;
-            }
-        }
-
-        async function sendFriendRequest() {
-            const trimmedRequest = state.friendRequestInput.trim();
-            if (!trimmedRequest) return;
-
-            const targetUser = state.allUsers.find(u => u.username.toLowerCase() === trimmedRequest.toLowerCase() && u.uid !== state.currentUser.uid);
-
-            if (!targetUser) {
-                state.error = 'User not found';
-                render();
-                return;
-            }
-
-            if (state.friends.some(f => f.uid === targetUser.uid)) {
-                state.error = 'Already friends with this user';
-                render();
-                return;
-            }
-
-            if (state.blockedUsers.includes(targetUser.uid)) {
-                state.error = 'You have blocked this user'; // Or "This user is blocked by you"
-                render();
-                return;
-            }
-            
-            // Check if *target user* has blocked *current user*
-            const targetBlockedListRef = await get(ref(database, `users/${targetUser.uid}/blocked/${state.currentUser.uid}`));
-            if (targetBlockedListRef.exists()) {
-                state.error = 'This user has blocked you and cannot receive requests.';
-                render();
-                return;
-            }
-
-            const existingRequest = await get(ref(database, `friendRequests/${targetUser.uid}/${state.currentUser.uid}`));
-            if (existingRequest.exists()) {
-                state.error = 'Friend request already sent';
-                render();
-                return;
-            }
-
-            await set(ref(database, `friendRequests/${targetUser.uid}/${state.currentUser.uid}`), {
-                from: state.currentUser.username,
-                fromUid: state.currentUser.uid,
-                timestamp: Date.now()
-            });
-
-            state.friendRequestInput = '';
-            state.error = ''; // Clear error on success
-            render();
-        }
-
-        async function acceptFriendRequest(request) {
-            await set(ref(database, `users/${state.currentUser.uid}/friends/${request.fromUid}`), true);
-            await set(ref(database, `users/${request.fromUid}/friends/${state.currentUser.uid}`), true);
-            await remove(ref(database, `friendRequests/${state.currentUser.uid}/${request.fromUid}`));
-        }
-
-        async function declineFriendRequest(request) {
-            await remove(ref(database, `friendRequests/${state.currentUser.uid}/${request.fromUid}`));
-        }
-
-        async function blockUser(friendUid) {
-            await set(ref(database, `users/${state.currentUser.uid}/blocked/${friendUid}`), true);
-            // Also remove from friends list if they were friends
-            await remove(ref(database, `users/${state.currentUser.uid}/friends/${friendUid}`));
-            await remove(ref(database, `users/${friendUid}/friends/${state.currentUser.uid}`));
-            
-            // Unsubscribe from message listener if chat was open
-            if (state.currentChatId) {
-                off(ref(database, `messages/${state.currentChatId}`));
-                state.currentChatId = null;
-            }
-
-            if (state.selectedFriend?.uid === friendUid) {
-                state.selectedFriend = null;
-                state.messages = [];
-            }
-            render();
-        }
-
-        async function unblockUser(friendUid) {
-            await remove(ref(database, `users/${state.currentUser.uid}/blocked/${friendUid}`));
-            render(); // Rerender to update settings modal
-        }
-
-        async function sendMessage() {
-            const trimmedMessage = state.messageInput.trim();
-            if (!trimmedMessage || !state.selectedFriend) return;
-
-            const chatId = [state.currentUser.uid, state.selectedFriend.uid].sort().join('_');
-            const messagesRef = ref(database, `messages/${chatId}`);
-            const newMessageRef = push(messagesRef);
-
-            await set(newMessageRef, {
-                text: trimmedMessage,
-                senderId: state.currentUser.uid,
-                senderName: state.currentUser.username,
-                timestamp: Date.now(),
-                type: 'text'
-            });
-
-            state.messageInput = '';
-            render();
-        }
-
-        async function sendImage() {
-            const trimmedImageUrl = state.imageUrlInput.trim();
-            if (!trimmedImageUrl || !state.selectedFriend) return;
-
-            const chatId = [state.currentUser.uid, state.selectedFriend.uid].sort().join('_');
-            const messagesRef = ref(database, `messages/${chatId}`);
-            const newMessageRef = push(messagesRef);
-
-            await set(newMessageRef, {
-                imageUrl: trimmedImageUrl,
-                senderId: state.currentUser.uid,
-                senderName: state.currentUser.username,
-                timestamp: Date.now(),
-                type: 'image'
-            });
-
-            state.imageUrlInput = '';
-            render();
-        }
-
-        async function updateAvatar() {
-            const trimmedNewAvatarUrl = state.newAvatarUrl.trim();
-            if (!trimmedNewAvatarUrl) return;
-
-            await update(ref(database, `users/${state.currentUser.uid}`), {
-                avatar: trimmedNewAvatarUrl
-            });
-
-            state.currentUser.avatar = trimmedNewAvatarUrl;
-            state.newAvatarUrl = '';
-            render();
-        }
-
-        async function toggleTheme() {
-            const newTheme = state.theme === 'dark' ? 'light' : 'dark';
-            state.theme = newTheme;
-            await update(ref(database, `users/${state.currentUser.uid}`), {
-                theme: newTheme
-            });
-            render();
-        }
-
-        function selectFriend(friend) {
-            // Unsubscribe from previous chat listener if one was active
-            if (state.currentChatId && state.selectedFriend && state.selectedFriend.uid !== friend.uid) {
-                const prevChatId = [state.currentUser.uid, state.selectedFriend.uid].sort().join('_');
-                off(ref(database, `messages/${prevChatId}`));
-            }
-
-            state.selectedFriend = friend;
-            state.messages = [];
-            state.error = ''; // Clear any friend request error
-            render();
-            setupMessageListener(); // Setup listener for the new selected chat
-        }
-
+        // Main render function
         function render() {
-            const colors = themes[state.theme];
-            const app = document.getElementById('app');
+            const appEl = document.getElementById('app');
+            if (!currentUser) {
+                appEl.innerHTML = renderAuth();
+            } else if (!userProfile) {
+                appEl.innerHTML = '<div class="auth-container"><div class="auth-card">Loading...</div></div>';
+            } else {
+                console.log('Rendering main UI with:', friends.length, 'friends and', groups.length, 'groups');
+                appEl.innerHTML = renderMain();
+                scrollToBottom();
+            }
+        }
 
-            if (state.view === 'auth') {
-                app.innerHTML = `
-                    <div class="min-h-screen ${colors.bg} ${colors.text} flex items-center justify-center p-4">
-                        <div class="${colors.secondary} p-8 rounded-lg shadow-2xl w-full max-w-md border ${colors.border}">
-                            <h1 class="text-3xl font-bold mb-6 text-center ${colors.accent}">
-                                ${state.authMode === 'login' ? 'Login' : 'Sign Up'}
-                            </h1>
-                            ${state.error ? `<div class="bg-red-500 text-white p-3 rounded mb-4">${state.error}</div>` : ''}
-                            <form id="auth-form" class="space-y-4">
-                                <input type="text" id="username" placeholder="Username" value="${state.username}" 
-                                    class="w-full p-3 ${colors.tertiary} ${colors.text} rounded border ${colors.border} focus:outline-none focus:ring-2 focus:ring-cyan-400">
-                                <input type="password" id="password" placeholder="Password" value="${state.password}"
-                                    class="w-full p-3 ${colors.tertiary} ${colors.text} rounded border ${colors.border} focus:outline-none focus:ring-2 focus:ring-cyan-400">
-                                ${state.authMode === 'signup' ? `
-                                    <input type="url" id="avatar-url" placeholder="Avatar URL (optional)" value="${state.avatarUrl}"
-                                        class="w-full p-3 ${colors.tertiary} ${colors.text} rounded border ${colors.border} focus:outline-none focus:ring-2 focus:ring-cyan-400">
-                                ` : ''}
-                                <button type="submit" class="w-full ${colors.accentBg} text-white p-3 rounded font-semibold hover:opacity-90 transition">
-                                    ${state.authMode === 'login' ? 'Login' : 'Sign Up'}
-                                </button>
+        function renderAuth() {
+            if (isLoginView) {
+                return `
+                    <div class="auth-container">
+                        <div class="auth-card">
+                            <h1 class="auth-title">ATOM</h1>
+                            <form onsubmit="handleLogin(event)">
+                                <div class="form-group">
+                                    <label class="form-label">Email</label>
+                                    <input type="email" id="email" class="form-control" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Password</label>
+                                    <input type="password" id="password" class="form-control" required>
+                                </div>
+                                <div id="error" class="error-message"></div>
+                                <button type="submit" class="btn btn-primary">Sign In</button>
                             </form>
-                            <p class="mt-4 text-center ${colors.textSecondary}">
-                                ${state.authMode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-                                <button id="toggle-auth" class="${colors.accent} font-semibold hover:underline">
-                                    ${state.authMode === 'login' ? 'Sign Up' : 'Login'}
-                                </button>
-                            </p>
+                            <div class="toggle-form">
+                                Don't have an account? 
+                                <button onclick="toggleAuth()">Sign up</button>
+                            </div>
                         </div>
                     </div>
                 `;
-
-                document.getElementById('auth-form').onsubmit = handleAuth;
-                // Keep oninput handlers for reactive updates to the state for rendering purposes (like pre-filling fields when toggling auth mode)
-                document.getElementById('username').oninput = (e) => state.username = e.target.value;
-                document.getElementById('password').oninput = (e) => state.password = e.target.value;
-                if (state.authMode === 'signup') {
-                    document.getElementById('avatar-url').oninput = (e) => state.avatarUrl = e.target.value;
-                }
-                document.getElementById('toggle-auth').onclick = () => {
-                    state.authMode = state.authMode === 'login' ? 'signup' : 'login';
-                    state.error = ''; // Clear error when switching modes
-                    render();
-                };
-
-                return;
-            }
-
-            // Main view
-            app.innerHTML = `
-                <div class="flex h-screen ${colors.bg} ${colors.text}">
-                    <!-- Sidebar -->
-                    <div class="w-80 ${colors.secondary} border-r ${colors.border} flex flex-col">
-                        <!-- User Profile -->
-                        <div class="p-4 ${colors.tertiary} border-b ${colors.border} flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <img src="${state.currentUser.avatar}" alt="Avatar" class="w-10 h-10 rounded-full">
-                                <span class="font-semibold">${state.currentUser.username}</span>
-                            </div>
-                            <div class="flex gap-2">
-                                <button id="settings-btn" class="p-2 ${colors.hover} rounded">${icons.settings}</button>
-                                <button id="logout-btn" class="p-2 ${colors.hover} rounded">${icons.logout}</button>
-                            </div>
-                        </div>
-
-                        <!-- Friend Requests -->
-                        ${state.friendRequests.length > 0 ? `
-                            <div class="p-4 border-b ${colors.border}">
-                                <h3 class="font-semibold mb-2 flex items-center gap-2">
-                                    ${icons.userPlus}
-                                    Friend Requests (${state.friendRequests.length})
-                                </h3>
-                                ${state.friendRequests.map(req => `
-                                    <div class="flex items-center justify-between p-2 ${colors.tertiary} rounded mb-2">
-                                        <span class="text-sm">${req.from}</span>
-                                        <div class="flex gap-2">
-                                            <button onclick="window.acceptRequest('${req.fromUid}')" class="p-1 bg-green-600 rounded hover:bg-green-700">${icons.check}</button>
-                                            <button onclick="window.declineRequest('${req.fromUid}')" class="p-1 bg-red-600 rounded hover:bg-red-700">${icons.x}</button>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        ` : ''}
-
-                        <!-- Add Friend -->
-                        <div class="p-4 border-b ${colors.border}">
-                            <div class="flex gap-2">
-                                <input type="text" id="friend-request-input" placeholder="Enter username" value="${state.friendRequestInput}"
-                                    class="flex-1 p-2 ${colors.tertiary} rounded border ${colors.border} focus:outline-none text-sm">
-                                <button id="send-friend-request" class="${colors.accentBg} text-white p-2 rounded hover:opacity-90">${icons.userPlus}</button>
-                            </div>
-                            ${state.error ? `<p class="text-red-500 text-xs mt-2">${state.error}</p>` : ''}
-                        </div>
-
-                        <!-- Friends List -->
-                        <div class="flex-1 overflow-y-auto">
-                            <div class="p-4">
-                                <h3 class="font-semibold mb-3 flex items-center gap-2">
-                                    ${icons.users}
-                                    Friends (${state.friends.length})
-                                </h3>
-                                ${state.friends.map(friend => `
-                                    <div onclick="window.selectFriend('${friend.uid}')" 
-                                        class="flex items-center gap-3 p-3 rounded cursor-pointer mb-2 ${state.selectedFriend?.uid === friend.uid ? colors.tertiary : colors.hover}">
-                                        <img src="${friend.avatar}" alt="${friend.username}" class="w-10 h-10 rounded-full">
-                                        <span>${friend.username}</span>
-                                    </div>
-                                `).join('')}
+            } else {
+                return `
+                    <div class="auth-container">
+                        <div class="auth-card">
+                            <h1 class="auth-title">ATOM</h1>
+                            <form onsubmit="handleSignup(event)">
+                                <div class="form-group">
+                                    <label class="form-label">Username (3-20 characters)</label>
+                                    <input type="text" id="username" class="form-control" required pattern="[a-zA-Z0-9_]{3,20}" minlength="3" maxlength="20" title="Letters, numbers, underscore only (3-20 characters)">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Email</label>
+                                    <input type="email" id="email" class="form-control" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Password</label>
+                                    <input type="password" id="password" class="form-control" required minlength="6">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Confirm Password</label>
+                                    <input type="password" id="confirm" class="form-control" required>
+                                </div>
+                                <div id="error" class="error-message"></div>
+                                <button type="submit" class="btn btn-primary">Sign Up</button>
+                            </form>
+                            <div class="toggle-form">
+                                Already have an account? 
+                                <button onclick="toggleAuth()">Sign in</button>
                             </div>
                         </div>
                     </div>
-
-                    <!-- Main Chat Area -->
-                    <div class="flex-1 flex flex-col">
-                        ${state.selectedFriend ? `
-                            <!-- Chat Header -->
-                            <div class="p-4 ${colors.secondary} border-b ${colors.border} flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <img src="${state.selectedFriend.avatar}" alt="${state.selectedFriend.username}" class="w-10 h-10 rounded-full">
-                                    <span class="font-semibold">${state.selectedFriend.username}</span>
-                                </div>
-                                <button onclick="window.blockFriend('${state.selectedFriend.uid}')" class="p-2 bg-red-600 rounded hover:bg-red-700 flex items-center gap-2 text-sm">
-                                    ${icons.ban}
-                                    Block
-                                </button>
-                            </div>
-
-                            <!-- Messages -->
-                            <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-3">
-                                ${state.messages.map(msg => `
-                                    <div class="flex ${msg.senderId === state.currentUser.uid ? 'justify-end' : 'justify-start'}">
-                                        <div class="max-w-md rounded-lg p-3 ${msg.senderId === state.currentUser.uid ? `${colors.accentBg} text-white` : colors.tertiary}">
-                                            <div class="text-xs opacity-75 mb-1">${msg.senderName}</div>
-                                            ${msg.type === 'text' ? `<div class="break-words">${msg.text}</div>` : `<img src="${msg.imageUrl}" alt="Shared" class="max-w-full rounded">`}
-                                            <div class="text-xs opacity-75 mt-1">${new Date(msg.timestamp).toLocaleTimeString()}</div>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-
-                            <!-- Message Input -->
-                            <div class="p-4 ${colors.secondary} border-t ${colors.border}">
-                                <div class="flex gap-2 mb-2">
-                                    <input type="text" id="image-url-input" placeholder="Paste image URL..." value="${state.imageUrlInput}"
-                                        class="flex-1 p-2 ${colors.tertiary} rounded border ${colors.border} focus:outline-none text-sm">
-                                    <button id="send-image-btn" class="${colors.accentBg} text-white px-4 rounded hover:opacity-90">${icons.image}</button>
-                                </div>
-                                <div class="flex gap-2">
-                                    <input type="text" id="message-input" placeholder="Type a message..." value="${state.messageInput}"
-                                        class="flex-1 p-3 ${colors.tertiary} rounded border ${colors.border} focus:outline-none">
-                                    <button id="send-message-btn" class="${colors.accentBg} text-white p-3 rounded hover:opacity-90">${icons.send}</button>
-                                </div>
-                            </div>
-                        ` : `
-                            <div class="flex-1 flex items-center justify-center">
-                                <p class="${colors.textSecondary}">Select a friend to start chatting</p>
-                            </div>
-                        `}
-                    </div>
-
-                    <!-- Settings Modal -->
-                    ${state.showSettings ? `
-                        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                            <div class="${colors.secondary} p-6 rounded-lg shadow-2xl w-full max-w-md border ${colors.border}">
-                                <div class="flex justify-between items-center mb-4">
-                                    <h2 class="text-xl font-bold">Settings</h2>
-                                    <button id="close-settings">${icons.x}</button>
-                                </div>
-                                <div class="space-y-4">
-                                    <!-- Theme Toggle -->
-                                    <div class="flex items-center justify-between">
-                                        <span>Theme</span>
-                                        <button id="toggle-theme" class="flex items-center gap-2 p-2 ${colors.tertiary} rounded">
-                                            ${state.theme === 'dark' ? icons.moon : icons.sun}
-                                            ${state.theme === 'dark' ? 'Dark' : 'Light'}
-                                        </button>
-                                    </div>
-
-                                    <!-- Avatar Update -->
-                                    <div>
-                                        <label class="block mb-2">Change Avatar</label>
-                                        <div class="flex gap-2">
-                                            <input type="url" id="new-avatar-url" placeholder="Enter new avatar URL" value="${state.newAvatarUrl}"
-                                                class="flex-1 p-2 ${colors.tertiary} rounded border ${colors.border} focus:outline-none">
-                                            <button id="update-avatar" class="${colors.accentBg} text-white px-4 rounded hover:opacity-90">Update</button>
-                                        </div>
-                                        <p class="text-xs ${colors.textSecondary} mt-1">Use Imgur, ImgBB, or any direct image URL</p>
-                                    </div>
-
-                                    <!-- Blocked Users -->
-                                    ${state.blockedUsers.length > 0 ? `
-                                        <div>
-                                            <h3 class="font-semibold mb-2">Blocked Users</h3>
-                                            ${state.blockedUsers.map(uid => {
-                                                const user = state.allUsers.find(u => u.uid === uid);
-                                                return user ? `
-                                                    <div class="flex items-center justify-between p-2 ${colors.tertiary} rounded mb-2">
-                                                        <span>${user.username}</span>
-                                                        <button onclick="window.unblockFriend('${uid}')" class="text-sm bg-green-600 px-3 py-1 rounded hover:bg-green-700">Unblock</button>
-                                                    </div>
-                                                ` : '';
-                                            }).join('')}
-                                        </div>
-                                    ` : ''}
-                                </div>
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-
-            // Event listeners for main view
-            document.getElementById('logout-btn').onclick = handleLogout;
-            document.getElementById('settings-btn').onclick = () => {
-                state.showSettings = !state.showSettings;
-                render();
-            };
-
-            if (state.showSettings) {
-                document.getElementById('close-settings').onclick = () => {
-                    state.showSettings = false;
-                    render();
-                };
-                document.getElementById('toggle-theme').onclick = toggleTheme;
-                document.getElementById('new-avatar-url').oninput = (e) => state.newAvatarUrl = e.target.value;
-                document.getElementById('update-avatar').onclick = updateAvatar;
-            }
-
-            document.getElementById('friend-request-input').oninput = (e) => state.friendRequestInput = e.target.value;
-            document.getElementById('friend-request-input').onkeypress = (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault(); // Prevent form submission
-                    sendFriendRequest();
-                }
-            };
-            document.getElementById('send-friend-request').onclick = sendFriendRequest;
-
-            if (state.selectedFriend) {
-                document.getElementById('message-input').oninput = (e) => state.messageInput = e.target.value;
-                document.getElementById('message-input').onkeypress = (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault(); // Prevent form submission
-                        sendMessage();
-                    }
-                };
-                document.getElementById('send-message-btn').onclick = sendMessage;
-                document.getElementById('image-url-input').oninput = (e) => state.imageUrlInput = e.target.value;
-                document.getElementById('image-url-input').onkeypress = (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault(); // Prevent form submission
-                        sendImage();
-                    }
-                };
-                document.getElementById('send-image-btn').onclick = sendImage;
+                `;
             }
         }
 
-        // Global functions for inline handlers
-        window.acceptRequest = async (fromUid) => {
-            await acceptFriendRequest({ fromUid });
-        };
+        function renderMain() {
+            const reqCount = friendRequests.length;
+            const myAvatar = userProfile.avatarUrl ? 
+                `<img src="${userProfile.avatarUrl}" alt="Avatar">` : 
+                (userProfile.avatar || userProfile.username.charAt(0).toUpperCase());
+            
+            return `
+                <div class="chat-layout">
+                    <div class="sidebar">
+                        <div class="sidebar-header">
+                            <div style="display: flex; align-items: center; gap: 10px; cursor: pointer;" onclick="openSettings()">
+                                <div class="avatar">${myAvatar}</div>
+                                <div class="user-info">
+                                    <div class="user-name">${userProfile.username}</div>
+                                    <div class="user-status status-online">Online</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px; margin-top: 10px;">
+                                <button class="btn btn-sm btn-secondary" onclick="toggleTheme()">
+                                    ${theme === 'dark' ? '☀️' : '🌙'} Theme
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="handleSignOut()">Sign Out</button>
+                            </div>
+                        </div>
+                        
+                        <div class="tabs">
+                            <div class="tab ${activeTab === 'friends' ? 'active' : ''}" onclick="setTab('friends')">Friends</div>
+                            <div class="tab ${activeTab === 'groups' ? 'active' : ''}" onclick="setTab('groups')">Groups</div>
+                            <div class="tab ${activeTab === 'requests' ? 'active' : ''}" onclick="setTab('requests')">
+                                Requests${reqCount > 0 ? '<span class="badge">' + reqCount + '</span>' : ''}
+                            </div>
+                        </div>
+                        
+                        <div class="sidebar-content">
+                            ${renderSidebar()}
+                        </div>
+                    </div>
+                    
+                    <div class="chat-area">
+                        ${renderChat()}
+                    </div>
+                </div>
+                
+                ${renderModals()}
+            `;
+        }
 
-        window.declineRequest = async (fromUid) => {
-            await declineFriendRequest({ fromUid });
-        };
+        function renderSidebar() {
+            console.log('Rendering sidebar with activeTab:', activeTab);
+            console.log('Friends data:', friends);
+            console.log('Groups data:', groups);
+            console.log('Friend requests data:', friendRequests);
 
-        window.selectFriend = (friendUid) => {
-            const friend = state.friends.find(f => f.uid === friendUid);
-            if (friend) selectFriend(friend);
-        };
+            if (activeTab === 'friends') {
+                console.log('Rendering friends tab, friends.length:', friends.length);
+                const friendsContent = friends.length === 0 ?
+                    '<div class="empty"><div class="empty-icon">👥</div><p>No friends yet. Search to add!</p></div>' :
+                    friends.map(f => {
+                        console.log('Rendering friend:', f.username);
+                        const fAvatar = f.avatarUrl ? `<img src="${f.avatarUrl}" alt="Avatar">` : (f.avatar || f.username.charAt(0).toUpperCase());
+                        return `
+                            <div class="list-item ${activeChat === f.id && activeChatType === 'friend' ? 'active' : ''}" onclick="selectChat('${f.id}', 'friend')">
+                                <div class="avatar avatar-sm">${fAvatar}</div>
+                                <div class="user-info">
+                                    <div class="item-title">${f.username}</div>
+                                    <div class="item-subtitle">${f.bio || 'Hey there!'}</div>
+                                </div>
+                                <button class="btn btn-sm btn-secondary" onclick="viewProfile('${f.id}'); event.stopPropagation();">View</button>
+                            </div>
+                        `;
+                    }).join('');
 
-        window.blockFriend = async (friendUid) => {
-            await blockUser(friendUid);
-        };
+                console.log('Friends content:', friendsContent);
+                return `
+                    <div class="tab-content active">
+                        <div class="search">
+                            <form class="search-form" onsubmit="searchUser(event)">
+                                <input type="text" id="search-input" class="search-input" placeholder="Search username..." required>
+                                <button type="submit" class="btn btn-sm btn-primary">Add</button>
+                            </form>
+                        </div>
+                        <div class="user-list">
+                            ${friendsContent}
+                        </div>
+                    </div>
+                `;
+            } else if (activeTab === 'groups') {
+                console.log('Rendering groups tab, groups.length:', groups.length);
+                const groupsContent = groups.length === 0 ?
+                    '<div class="empty"><div class="empty-icon">👥</div><p>No groups yet. Create one!</p></div>' :
+                    groups.map(g => {
+                        console.log('Rendering group:', g.name);
+                        return `
+                            <div class="list-item ${activeChat === g.id && activeChatType === 'group' ? 'active' : ''}" onclick="selectChat('${g.id}', 'group')">
+                                <div class="avatar avatar-sm">#${g.name.charAt(0).toUpperCase()}</div>
+                                <div class="user-info">
+                                    <div class="item-title">${g.name}</div>
+                                    <div class="item-subtitle">${g.members.length} members</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
 
-        window.unblockFriend = async (friendUid) => {
-            await unblockUser(friendUid);
-        };
+                console.log('Groups content:', groupsContent);
+                return `
+                    <div class="tab-content active">
+                        <div class="search">
+                            <button class="btn btn-primary" style="width:100%;" onclick="openCreateGroup()">Create Group</button>
+                        </div>
+                        <div class="user-list">
+                            ${groupsContent}
+                        </div>
+                    </div>
+                `;
+            } else {
+                return `
+                    <div class="tab-content active">
+                        <div class="user-list">
+                            ${friendRequests.length === 0 ?
+                                '<div class="empty"><div class="empty-icon">📬</div><p>No pending requests</p></div>' :
+                                friendRequests.map(r => {
+                                    const rAvatar = r.avatarUrl ? `<img src="${r.avatarUrl}" alt="Avatar">` : (r.avatar || r.username.charAt(0).toUpperCase());
+                                    return `
+                                        <div class="list-item">
+                                            <div class="avatar avatar-sm">${rAvatar}</div>
+                                            <div class="user-info">
+                                                <div class="item-title">${r.username}</div>
+                                                <div class="item-subtitle">@${r.username}</div>
+                                            </div>
+                                            <div class="item-actions">
+                                                <button class="btn btn-sm btn-success" onclick="acceptRequest('${r.id}')">Accept</button>
+                                                <button class="btn btn-sm btn-danger" onclick="rejectRequest('${r.id}')">Reject</button>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')
+                            }
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        function isGroupAdmin(group) {
+            return group.admin === currentUser.uid || (group.admins && group.admins.includes(currentUser.uid));
+        }
+
+        function renderChat() {
+            console.log('renderChat called with activeChat:', activeChat, 'activeChatType:', activeChatType);
+
+            if (!activeChat) {
+                return `
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 40px; text-align: center;">
+                        <div style="font-size: 64px; margin-bottom: 20px;">💬</div>
+                        <h2 style="margin-bottom: 10px;">Welcome to Atom Messenger</h2>
+                        <p style="color: #9ca3af;">Select a friend or group to start chatting!</p>
+                    </div>
+                `;
+            }
+
+            if (activeChatType === 'friend') {
+                console.log('Rendering friend chat');
+                const friend = friends.find(f => f.id === activeChat);
+                if (!friend) {
+                    console.log('Friend not found:', activeChat);
+                    return '<div>Friend not found</div>';
+                }
+
+                const chatKey = [currentUser.uid, friend.id].sort().join('_');
+                const chatMsgs = (messages[chatKey] || []).sort((a, b) => a.timestamp - b.timestamp);
+                const friendAvatar = friend.avatarUrl ? `<img src="${friend.avatarUrl}" alt="Avatar">` : (friend.avatar || friend.username.charAt(0).toUpperCase());
+
+                return `
+                    <div class="chat-header">
+                        <div class="avatar avatar-sm">${friendAvatar}</div>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 500;">${friend.username}</div>
+                            <div class="user-status">${friend.bio || 'Hey there!'}</div>
+                        </div>
+                        <button class="btn btn-sm btn-secondary" onclick="viewProfile('${friend.id}')">Profile</button>
+                    </div>
+                    <div class="chat-messages" id="chat-msgs">
+                        ${chatMsgs.length === 0 ? 
+                            '<div style="text-align:center;color:#9ca3af;margin-top:40px;">Start the conversation!</div>' :
+                            chatMsgs.map(m => {
+                                const isSent = m.senderId === currentUser.uid;
+                                const time = new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                                return `
+                                    <div class="message ${isSent ? 'sent' : 'received'}">
+                                        ${!isSent ? '<div class="message-sender">' + friend.username + '</div>' : ''}
+                                        <div class="message-bubble">
+                                            ${m.text ? escapeHtml(m.text) : ''}
+                                        </div>
+                                        <div class="message-time">${time}</div>
+                                    </div>
+                                `;
+                            }).join('')
+                        }
+                    </div>
+                    <div id="image-preview-container" class="image-preview-container">
+                        <div id="image-preview" class="image-preview"></div>
+                    </div>
+                    <div class="chat-input-container">
+                        <form class="chat-form" onsubmit="sendMessage(event)">
+                            <input type="file" id="msg-image-input" class="image-input" accept="image/*" onchange="handleMessageImageSelect(event)">
+                            <button type="button" class="icon-btn" onclick="document.getElementById('msg-image-input').click()" title="Send image">
+                                📷
+                            </button>
+                            <input type="text" class="message-input" id="msg-input" placeholder="Type a message..." autocomplete="off">
+                            <button type="submit" class="icon-btn primary" title="Send message">
+                                ➤
+                            </button>
+                        </form>
+                    </div>
+                `;
+            } else {
+                console.log('Rendering group chat');
+                const group = groups.find(g => g.id === activeChat);
+                if (!group) {
+                    console.log('Group not found:', activeChat, 'Available groups:', groups.map(g => g.id));
+                    return '<div>Group not found</div>';
+                }
+
+                console.log('Found group:', group.name, 'with', group.members.length, 'members');
+
+                const groupMsgs = (messages[activeChat] || []).sort((a, b) => a.timestamp - b.timestamp);
+
+                return `
+                    <div class="chat-header">
+                        <div class="avatar avatar-sm" style="font-size: 0.8rem; text-overflow: ellipsis; overflow: hidden;">#${group.name.charAt(0).toUpperCase()}</div>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 500;">${group.name}</div>
+                            <div class="user-status">${group.members.length} members</div>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-sm btn-secondary" onclick="openAddMembersModal()">Add Members</button>
+                            <button class="btn btn-sm btn-warning" onclick="openRemoveMembersModal()">Remove Members</button>
+                            ${isGroupAdmin(group) ? '<button class="btn btn-sm btn-info" onclick="openGroupSettings()">Settings</button>' : ''}
+                        </div>
+                    </div>
+                    <div class="group-members-section" id="group-members-section" style="padding: 15px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); max-height: 120px; overflow-y: auto;">
+                        <div class="group-members-header" style="font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--text);">Group Members</div>
+                        <div class="group-members-list" id="group-members-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            <!-- Group members will be populated here -->
+                        </div>
+                    </div>
+                    <div class="chat-messages" id="chat-msgs">
+                        ${groupMsgs.length === 0 ? 
+                            '<div style="text-align:center;color:#9ca3af;margin-top:40px;">Start the conversation!</div>' :
+                            groupMsgs.map(m => {
+                                const isSent = m.senderId === currentUser.uid;
+                                const time = new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                                return `
+                                    <div class="message ${isSent ? 'sent' : 'received'}">
+                                        ${!isSent ? '<div class="message-sender">' + (m.senderName || 'User') + '</div>' : ''}
+                                        <div class="message-bubble">
+                                            ${m.text ? escapeHtml(m.text) : ''}
+                                            ${m.imageUrl ? '<img src="' + m.imageUrl + '" class="message-image" alt="Image" onclick="window.open(\'' + m.imageUrl + '\', \'_blank\')">' : ''}
+                                        </div>
+                                        <div class="message-time">${time}</div>
+                                    </div>
+                                `;
+                            }).join('')
+                        }
+                </div>
+                    <div id="image-preview-container" class="image-preview-container">
+                        <div id="image-preview" class="image-preview"></div>
+                    </div>
+                    <div class="chat-input-container">
+                        <form class="chat-form" onsubmit="sendGroupMessage(event)">
+                            <input type="file" id="msg-image-input" class="image-input" accept="image/*" onchange="handleMessageImageSelect(event)">
+                            <button type="button" class="icon-btn" onclick="document.getElementById('msg-image-input').click()" title="Send image">
+                                📷
+                            </button>
+                            <input type="text" class="message-input" id="msg-input" placeholder="Type a message..." autocomplete="off">
+                            <button type="submit" class="icon-btn primary" title="Send message">
+                                ➤
+                            </button>
+                        </form>
+                    </div>
+                `;
+            }
+        }
+        
+        function renderModals() {
+            const avatarDisplay = userProfile.avatarUrl ? 
+                `<img src="${userProfile.avatarUrl}" alt="Avatar">` : 
+                (userProfile.avatar || userProfile.username.charAt(0).toUpperCase());
+            
+            return `
+                <div id="settings-modal" class="modal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <div class="modal-title">Settings</div>
+                            <button class="modal-close" onclick="closeModal('settings-modal')">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="avatar-upload-container">
+                                <div class="avatar-preview" id="avatar-preview">
+                                    ${avatarDisplay}
+                                </div>
+                                <input type="file" id="avatar-file" class="avatar-upload-input" accept="image/*" onchange="handleAvatarSelect(event)">
+                                <label for="avatar-file" class="avatar-upload-btn">📷 Upload Photo</label>
+                                <div class="avatar-options">
+                                    <button type="button" class="avatar-option" onclick="setAvatarMode('emoji')">😊 Emoji</button>
+                                    <button type="button" class="avatar-option" onclick="setAvatarMode('text')">AB Text</button>
+                                    ${userProfile.avatarUrl ? '<button type="button" class="avatar-option" onclick="removeAvatar()">❌ Remove</button>' : ''}
+                                </div>
+                                <div id="avatar-mode-input" style="margin-top: 15px; display: none;">
+                                    <input type="text" id="edit-avatar-text" class="form-control" placeholder="Enter emoji or 2 letters" maxlength="2">
+                                </div>
+                            </div>
+                            
+                            <form onsubmit="updateProfile(event)">
+                                <div class="form-group">
+                                    <label class="form-label">Username (3-20 characters)</label>
+                                    <input type="text" id="edit-username" class="form-control" value="${userProfile.username}" required pattern="[a-zA-Z0-9_]{3,20}" minlength="3" maxlength="20" title="Letters, numbers, underscore only (3-20 characters)">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Bio</label>
+                                    <textarea id="edit-bio" class="form-control">${userProfile.bio || ''}</textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Save Changes</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="profile-modal" class="modal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <div class="modal-title">Profile</div>
+                            <button class="modal-close" onclick="closeModal('profile-modal')">&times;</button>
+                        </div>
+                        <div class="modal-body" id="profile-content"></div>
+                    </div>
+                </div>
+
+                <div id="group-modal" class="modal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <div class="modal-title">Create Group</div>
+                            <button class="modal-close" onclick="closeModal('group-modal')">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <form onsubmit="createGroup(event)">
+                                <div class="form-group">
+                                    <label class="form-label">Group Name</label>
+                                    <input type="text" id="group-name" class="form-control" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Add Friends</label>
+                                    <div class="checkbox-list" id="group-friends"></div>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Create Group</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="remove-members-modal" class="modal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <div class="modal-title">Remove Members from Group</div>
+                            <button class="modal-close" onclick="closeModal('remove-members-modal')">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <label class="form-label">Select Members to Remove</label>
+                                <div class="checkbox-list" id="remove-members-list"></div>
+                            </div>
+                            <button class="btn btn-danger" onclick="removeSelectedMembers()" style="width: 100%;">Remove Selected Members</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="group-settings-modal" class="modal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <div class="modal-title">Group Settings</div>
+                            <button class="modal-close" onclick="closeModal('group-settings-modal')">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="tabs">
+                                <button class="tab-btn active" data-tab="group-info">Group Info</button>
+                                <button class="tab-btn" data-tab="members">Members</button>
+                                <button class="tab-btn" data-tab="admins" id="admin-tab-btn" style="display: none;">Admin Settings</button>
+                            </div>
+                            
+                            <div id="group-info" class="tab-content active">
+                                <div class="form-group">
+                                    <label class="form-label">Group Name</label>
+                                    <input type="text" id="edit-group-name" class="form-control" required>
+                                </div>
+                                <button class="btn btn-primary" onclick="updateGroupName()" style="width: 100%; margin-bottom: 10px;">
+                                    Update Group Name
+                                </button>
+                                <button class="btn btn-secondary" onclick="openAddMembersModal()" style="width: 100%; margin-bottom: 10px;">
+                                    Add Members
+                                </button>
+                                ${group.admin === currentUser.uid ? `
+                                    <button class="btn btn-danger" onclick="deleteGroup()" style="width: 100%; margin-bottom: 10px;">
+                                        Delete Group
+                                    </button>
+                                ` : `
+                                    <button class="btn btn-danger" onclick="leaveGroup()" style="width: 100%; margin-bottom: 10px;">
+                                        Leave Group
+                                    </button>
+                                `}
+                            </div>
+                            
+                            <div id="members" class="tab-content">
+                                <div id="group-members-list">
+                                    <!-- Members will be loaded here -->
+                                    <div class="loading">Loading members...</div>
+                                </div>
+                            </div>
+                            
+                            <div id="admins" class="tab-content">
+                                <div id="admin-members-list">
+                                    <!-- Admin management will be loaded here -->
+                                    <div class="loading">Loading admin settings...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <style>
+                    .tabs {
+                        display: flex;
+                        border-bottom: 1px solid var(--border);
+                        margin-bottom: 15px;
+                    }
+                    
+                    .tab-btn {
+                        padding: 10px 15px;
+                        background: none;
+                        border: none;
+                        border-bottom: 2px solid transparent;
+                        cursor: pointer;
+                        color: var(--text);
+                        font-weight: 500;
+                    }
+                    
+                    .tab-btn.active {
+                        border-bottom-color: var(--primary);
+                        color: var(--primary);
+                    }
+                    
+                    .tab-content {
+                        display: none;
+                    }
+                    
+                    .tab-content.active {
+                        display: block;
+                    }
+                    
+                    .member-item {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        padding: 10px 0;
+                        border-bottom: 1px solid var(--border);
+                    }
+                    
+                    .member-info {
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                    }
+                    
+                    .member-name {
+                        font-weight: 500;
+                    }
+                    
+                    .member-status {
+                        font-size: 0.8em;
+                        color: var(--text-secondary);
+                    }
+                    
+                    .member-actions {
+                        display: flex;
+                        gap: 5px;
+                    }
+                    
+                    .admin-badge {
+                        background: var(--primary);
+                        color: white;
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        font-size: 0.7em;
+                        margin-left: 5px;
+                    }
+                </style>
+                
+                <script>
+                    // Tab switching functionality
+                    document.addEventListener('click', function(e) {
+                        if (e.target.classList.contains('tab-btn')) {
+                            const tabId = e.target.getAttribute('data-tab');
+                            
+                            // Update active tab button
+                            document.querySelectorAll('.tab-btn').forEach(btn => {
+                                btn.classList.remove('active');
+                            });
+                            e.target.classList.add('active');
+                            
+                            // Show active tab content
+                            document.querySelectorAll('.tab-content').forEach(content => {
+                                content.classList.remove('active');
+                            });
+                            document.getElementById(tabId).classList.add('active');
+                        }
+                    });
+                </script>
+
+                <div id="add-members-modal" class="modal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <div class="modal-title">Add Members to Group</div>
+                            <button class="modal-close" onclick="closeModal('add-members-modal')">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <label class="form-label">Search and Select Friends to Add</label>
+                                <input type="text" id="search-friends" class="form-control" placeholder="Search friends..." oninput="searchUser(event)">
+                                <div class="checkbox-list" id="add-members-list" style="max-height: 300px; overflow-y: auto; margin-top: 10px;"></div>
+                            </div>
+                            <button class="btn btn-primary" onclick="addSelectedMembers()" style="width: 100%;">Add Selected Members</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+            `;
+        }
+
+        // Utility functions
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function scrollToBottom() {
+            setTimeout(() => {
+                const msgs = document.getElementById('chat-msgs');
+                if (msgs) msgs.scrollTop = msgs.scrollHeight;
+            }, 100);
+        }
+
+        // Auth functions
+        function toggleAuth() {
+            isLoginView = !isLoginView;
+            render();
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorEl = document.getElementById('error');
+
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+            } catch (error) {
+                errorEl.textContent = error.message;
+            }
+        }
+
+        async function handleSignup(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const confirm = document.getElementById('confirm').value;
+            const errorEl = document.getElementById('error');
+
+            if (password !== confirm) {
+                errorEl.textContent = "Passwords don't match";
+                return;
+            }
+
+            try {
+                // Validate username format
+                const usernameRegex = /^[a-zA-Z0-9_]+$/;
+                if (!usernameRegex.test(username)) {
+                    errorEl.textContent = "Username can only contain letters, numbers, and underscores";
+                    return;
+                }
+
+                if (username.length < 3) {
+                    errorEl.textContent = "Username must be at least 3 characters";
+                    return;
+                }
+
+                if (username.length > 20) {
+                    errorEl.textContent = "Username must be less than 20 characters";
+                    return;
+                }
+
+                // Check if username exists
+                const usernameCheck = await db.ref('usernames').child(username).once('value');
+                if (usernameCheck.exists()) {
+                    errorEl.textContent = "Username already taken";
+                    return;
+                }
+
+                const cred = await auth.createUserWithEmailAndPassword(email, password);
+                await db.ref('users').child(cred.user.uid).set({
+                    username: username,
+                    email: email,
+                    bio: '',
+                    avatar: '',
+                    avatarUrl: null,
+                    friends: [],
+                    friendRequests: [],
+                    groups: []
+                });
+                await db.ref('usernames').child(username).set(cred.user.uid);
+            } catch (error) {
+                errorEl.textContent = error.message;
+            }
+        }
+
+        async function handleSignOut() {
+            await auth.signOut();
+        }
+
+        // Tab functions
+        function setTab(tab) {
+            activeTab = tab;
+            render();
+        }
+
+        // Chat functions
+        function selectChat(id, type) {
+            activeChat = id;
+            activeChatType = type;
+
+            if (type === 'group') {
+                // Populate group members list synchronously first
+                populateGroupMembers(id);
+            }
+
+            render();
+        }
+
+        function populateGroupMembers(groupId) {
+            const group = groups.find(g => g.id === groupId);
+            if (!group) return;
+
+            const membersList = document.getElementById('group-members-list');
+            if (!membersList) return;
+
+            membersList.innerHTML = '';
+
+            group.members.forEach(memberId => {
+                const user = allUsers[memberId];
+                if (!user) {
+                    // If user data isn't loaded yet, show a placeholder
+                    const memberElement = document.createElement('div');
+                    memberElement.className = 'group-member-avatar';
+                    memberElement.innerHTML = '?';
+                    memberElement.title = 'Loading...';
+                    memberElement.style.opacity = '0.5';
+                    membersList.appendChild(memberElement);
+                    return;
+                }
+
+                const memberAvatar = user.avatarUrl ?
+                    `<img src="${user.avatarUrl}" alt="Avatar">` :
+                    (user.avatar || user.username.charAt(0).toUpperCase());
+
+                const memberElement = document.createElement('div');
+                memberElement.className = 'group-member-avatar';
+                memberElement.innerHTML = memberAvatar;
+                memberElement.onclick = () => viewProfile(memberId);
+                memberElement.title = user.username;
+
+                membersList.appendChild(memberElement);
+            });
+        }
+
+        function handleMessageImageSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file');
+                return;
+            }
+
+            if (file.size > 5 * 1024 * 1024) {
+                alert('Image size must be less than 5MB for database storage');
+                return;
+            }
+
+            selectedMessageImage = file;
+            
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const container = document.getElementById('image-preview-container');
+                const preview = document.getElementById('image-preview');
+                preview.innerHTML = `
+                    <img src="${e.target.result}" alt="Preview">
+                    <button class="remove-image" onclick="removeMessageImage()">×</button>
+                `;
+                container.classList.add('active');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removeMessageImage() {
+            selectedMessageImage = null;
+            const container = document.getElementById('image-preview-container');
+            container.classList.remove('active');
+            document.getElementById('msg-image-input').value = '';
+        }
+
+        async function sendMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('msg-input');
+            const text = input.value.trim();
+            
+            if (!text && !selectedMessageImage) return;
+
+            const chatKey = [currentUser.uid, activeChat].sort().join('_');
+            const msgRef = db.ref('messages').child(chatKey).push();
+            
+            const messageData = {
+                text: text || '',
+                senderId: currentUser.uid,
+                receiverId: activeChat,
+                timestamp: Date.now()
+            };
+
+            // Convert image to base64 if selected
+            if (selectedMessageImage) {
+                try {
+                    const base64Image = await imageToBase64(selectedMessageImage, 5);
+                    messageData.imageUrl = base64Image;
+                } catch (error) {
+                    alert(error.message);
+                    return;
+                }
+            }
+            
+            await msgRef.set(messageData);
+
+            input.value = '';
+            removeMessageImage();
+        }
+
+        async function sendGroupMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('msg-input');
+            const text = input.value.trim();
+            
+            if (!text && !selectedMessageImage) return;
+
+            const msgRef = db.ref('groupMessages').child(activeChat).push();
+            
+            const messageData = {
+                text: text || '',
+                senderId: currentUser.uid,
+                senderName: userProfile.username,
+                timestamp: Date.now()
+            };
+
+            // Convert image to base64 if selected
+            if (selectedMessageImage) {
+                try {
+                    const base64Image = await imageToBase64(selectedMessageImage, 5);
+                    messageData.imageUrl = base64Image;
+                } catch (error) {
+                    alert(error.message);
+                    return;
+                }
+            }
+            
+            await msgRef.set(messageData);
+
+            input.value = '';
+            removeMessageImage();
+        }
+
+        // Friend functions
+        async function searchUser(e) {
+            e.preventDefault();
+            const input = document.getElementById('search-input');
+            const username = input.value.trim();
+            if (!username) return;
+
+            try {
+                // Validate username format
+                const usernameRegex = /^[a-zA-Z0-9_]+$/;
+                if (!usernameRegex.test(username)) {
+                    alert('Invalid username format');
+                    return;
+                }
+
+                const uidSnap = await db.ref('usernames').child(username).once('value');
+                if (uidSnap.exists()) {
+                    const targetUid = uidSnap.val();
+                    if (targetUid === currentUser.uid) {
+                        alert('Cannot add yourself');
+                        return;
+                    }
+
+                    if (userProfile.friends && userProfile.friends.includes(targetUid)) {
+                        alert('Already friends');
+                        return;
+                    }
+
+                    // Send friend request
+                    await db.ref('users').child(targetUid).child('friendRequests').transaction(reqs => {
+                        if (!reqs) reqs = [];
+                        if (!reqs.includes(currentUser.uid)) reqs.push(currentUser.uid);
+                        return reqs;
+                    });
+
+                    alert('Friend request sent!');
+                    input.value = '';
+                } else {
+                    alert('User not found');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function acceptRequest(userId) {
+            // Add to both friend lists
+            await db.ref('users').child(currentUser.uid).child('friends').transaction(friends => {
+                if (!friends) friends = [];
+                if (!friends.includes(userId)) friends.push(userId);
+                return friends;
+            });
+
+            await db.ref('users').child(userId).child('friends').transaction(friends => {
+                if (!friends) friends = [];
+                if (!friends.includes(currentUser.uid)) friends.push(currentUser.uid);
+                return friends;
+            });
+
+            // Remove from requests
+            await db.ref('users').child(currentUser.uid).child('friendRequests').transaction(reqs => {
+                if (!reqs) return [];
+                return reqs.filter(id => id !== userId);
+            });
+        }
+
+        async function rejectRequest(userId) {
+            await db.ref('users').child(currentUser.uid).child('friendRequests').transaction(reqs => {
+                if (!reqs) return [];
+                return reqs.filter(id => id !== userId);
+            });
+        }
+
+        // Profile functions
+        function openSettings() {
+            document.getElementById('settings-modal').classList.add('active');
+        }
+
+        function viewProfile(userId) {
+            const user = allUsers[userId];
+            if (!user) return;
+
+            const userAvatar = user.avatarUrl ? 
+                `<img src="${user.avatarUrl}" alt="Avatar">` : 
+                (user.avatar || user.username.charAt(0).toUpperCase());
+
+            const content = `
+                <div class="profile-view">
+                    <div class="profile-avatar avatar">${userAvatar}</div>
+                    <div class="profile-name">${user.username}</div>
+                    <div class="profile-username">@${user.username}</div>
+                    ${user.bio ? '<div class="profile-bio">' + escapeHtml(user.bio) + '</div>' : '<div class="profile-bio" style="opacity: 0.5;">No bio yet</div>'}
+                </div>
+            `;
+
+            document.getElementById('profile-content').innerHTML = content;
+            document.getElementById('profile-modal').classList.add('active');
+        }
+
+        // Avatar functions
+        let selectedAvatarFile = null;
+        let avatarMode = 'photo'; // 'photo', 'emoji', 'text'
+        
+        // Message image functions
+        let selectedMessageImage = null;
+        
+        // Helper function to convert image to base64
+        function imageToBase64(file, maxSizeMB = 5) {
+            return new Promise((resolve, reject) => {
+                if (file.size > maxSizeMB * 1024 * 1024) {
+                    reject(new Error(`Image must be less than ${maxSizeMB}MB`));
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('Failed to read image'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function handleAvatarSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file');
+                return;
+            }
+
+            if (file.size > 5 * 1024 * 1024) {
+                alert('Image size must be less than 5MB for database storage');
+                return;
+            }
+
+            selectedAvatarFile = file;
+            avatarMode = 'photo';
+
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('avatar-preview').innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+            };
+            reader.readAsDataURL(file);
+
+            // Hide text input
+            document.getElementById('avatar-mode-input').style.display = 'none';
+        }
+
+        function setAvatarMode(mode) {
+            avatarMode = mode;
+            selectedAvatarFile = null;
+            
+            const input = document.getElementById('avatar-mode-input');
+            const preview = document.getElementById('avatar-preview');
+            
+            if (mode === 'emoji' || mode === 'text') {
+                input.style.display = 'block';
+                const textInput = document.getElementById('edit-avatar-text');
+                textInput.value = userProfile.avatar || '';
+                textInput.placeholder = mode === 'emoji' ? 'Enter emoji (e.g., 😊)' : 'Enter 2 letters (e.g., AB)';
+                
+                // Update preview as user types
+                textInput.oninput = () => {
+                    const val = textInput.value.slice(0, 2);
+                    preview.innerHTML = val || userProfile.username.charAt(0).toUpperCase();
+                };
+                
+                preview.innerHTML = userProfile.avatar || userProfile.username.charAt(0).toUpperCase();
+            } else {
+                input.style.display = 'none';
+            }
+        }
+
+        async function removeAvatar() {
+            if (!confirm('Remove your profile picture?')) return;
+
+            try {
+                await db.ref('users').child(currentUser.uid).update({
+                    avatarUrl: null,
+                    avatar: ''
+                });
+
+                alert('Avatar removed!');
+                closeModal('settings-modal');
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function updateProfile(e) {
+            e.preventDefault();
+            const newUsername = document.getElementById('edit-username').value.trim();
+            const newBio = document.getElementById('edit-bio').value.trim();
+
+            try {
+                // Validate username format
+                const usernameRegex = /^[a-zA-Z0-9_]+$/;
+                if (!usernameRegex.test(newUsername)) {
+                    alert('Username can only contain letters, numbers, and underscores');
+                    return;
+                }
+
+                if (newUsername.length < 3) {
+                    alert('Username must be at least 3 characters');
+                    return;
+                }
+
+                if (newUsername.length > 20) {
+                    alert('Username must be less than 20 characters');
+                    return;
+                }
+
+                // Show loading
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                const originalText = submitBtn.textContent;
+                submitBtn.textContent = 'Saving...';
+                submitBtn.disabled = true;
+
+                // Check if username changed and is available
+                if (newUsername !== userProfile.username) {
+                    const check = await db.ref('usernames').child(newUsername).once('value');
+                    if (check.exists()) {
+                        alert('Username already taken');
+                        submitBtn.textContent = originalText;
+                        submitBtn.disabled = false;
+                        return;
+                    }
+                    // Remove old username and add new
+                    await db.ref('usernames').child(userProfile.username).remove();
+                    await db.ref('usernames').child(newUsername).set(currentUser.uid);
+                }
+
+                const updates = {
+                    username: newUsername,
+                    bio: newBio
+                };
+
+                // Handle avatar based on mode
+                if (avatarMode === 'photo' && selectedAvatarFile) {
+                    // Convert image to base64 and store in database
+                    submitBtn.textContent = 'Processing image...';
+                    try {
+                        const base64Image = await imageToBase64(selectedAvatarFile, 5);
+                        updates.avatarUrl = base64Image;
+                        updates.avatar = ''; // Clear text avatar
+                    } catch (error) {
+                        alert(error.message);
+                        submitBtn.textContent = originalText;
+                        submitBtn.disabled = false;
+                        return;
+                    }
+                } else if (avatarMode === 'emoji' || avatarMode === 'text') {
+                    // Use emoji/text avatar
+                    const textAvatar = document.getElementById('edit-avatar-text').value.trim();
+                    updates.avatar = textAvatar;
+                    // Keep existing avatarUrl if any
+                } else if (!selectedAvatarFile && userProfile.avatarUrl) {
+                    // Keep existing photo if no changes
+                    updates.avatarUrl = userProfile.avatarUrl;
+                }
+
+                await db.ref('users').child(currentUser.uid).update(updates);
+
+                closeModal('settings-modal');
+                alert('Profile updated!');
+                selectedAvatarFile = null;
+            } catch (error) {
+                alert('Error: ' + error.message);
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                submitBtn.textContent = 'Save Changes';
+                submitBtn.disabled = false;
+            }
+        }
+
+        // Group functions
+        async function leaveGroup() {
+            if (!activeChat || activeChatType !== 'group') return;
+            
+            const group = groups.find(g => g.id === activeChat);
+            if (!group) return;
+            
+            // Check if user is the creator
+            if (group.admin === currentUser.uid) {
+                alert('Group creator cannot leave the group. You can delete the group instead.');
+                return;
+            }
+            
+            if (!confirm('Are you sure you want to leave this group?')) return;
+            
+            try {
+                // Remove user from group members
+                const updates = {};
+                updates[`groups/${group.id}/members/${currentUser.uid}`] = null;
+                updates[`users/${currentUser.uid}/groups/${group.id}`] = null;
+                
+                await db.ref().update(updates);
+                
+                // Update local state
+                groups = groups.filter(g => g.id !== group.id);
+                activeChat = null;
+                activeChatType = null;
+                render();
+                
+                alert('You have left the group.');
+            } catch (error) {
+                console.error('Error leaving group:', error);
+                alert('Failed to leave group. Please try again.');
+            }
+        }
+        
+        async function deleteGroup() {
+            if (!activeChat || activeChatType !== 'group') return;
+            
+            const group = groups.find(g => g.id === activeChat);
+            if (!group) return;
+            
+            // Check if user is the creator
+            if (group.admin !== currentUser.uid) {
+                alert('Only the group creator can delete the group.');
+                return;
+            }
+            
+            if (!confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
+            
+            try {
+                // Remove group data
+                const updates = {};
+                
+                // Remove group from groups
+                updates[`groups/${group.id}`] = null;
+                
+                // Remove group from all members
+                if (group.members) {
+                    group.members.forEach(memberId => {
+                        updates[`users/${memberId}/groups/${group.id}`] = null;
+                    });
+                }
+                
+                // Remove group messages
+                updates[`groupMessages/${group.id}`] = null;
+                
+                await db.ref().update(updates);
+                
+                // Update local state
+                groups = groups.filter(g => g.id !== group.id);
+                activeChat = null;
+                activeChatType = null;
+                render();
+                
+                alert('Group has been deleted.');
+            } catch (error) {
+                console.error('Error deleting group:', error);
+                alert('Failed to delete group. Please try again.');
+            }
+        }
+        
+        async function openCreateGroup() {
+            const friendsList = friends.map(f => `
+                <div class="checkbox-item">
+                    <input type="checkbox" id="friend-${f.id}" value="${f.id}">
+                    <label for="friend-${f.id}">${f.username}</label>
+                </div>
+            `).join('');
+
+            document.getElementById('group-friends').innerHTML = friendsList || '<p>No friends to add</p>';
+            document.getElementById('group-modal').classList.add('active');
+        }
+
+        async function openAddMembersModal() {
+            const modal = document.getElementById('add-members-modal');
+            const list = document.getElementById('add-members-list');
+            if (!modal || !list) {
+                console.error('Add Members modal elements missing');
+                return;
+            }
+
+            list.innerHTML = '';
+            const group = groups.find(g => g.id === activeChat);
+            if (!group) {
+                alert('Group not found');
+                return;
+            }
+
+            // Check if user is in the group (either as member or admin)
+            if (!group.members.includes(currentUser.uid)) {
+                alert('You must be a member of this group to add other people');
+                return;
+            }
+
+            // Show only friends who are not already members
+            const available = friends.filter(f => !group.members.includes(f.id));
+            if (available.length === 0) {
+                list.innerHTML = '<div style="color: var(--text-secondary);">No friends available to add</div>';
+            } else {
+                list.innerHTML = available.map(f => `
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="add-${f.id}" value="${f.id}">
+                        <label for="add-${f.id}">${f.username}</label>
+                    </div>
+                `).join('');
+            }
+
+            modal.classList.add('active');
+        }
+
+        function openRemoveMembersModal() {
+            if (!activeChat || activeChatType !== 'group') {
+                alert('Please select a group first');
+                return;
+            }
+
+            const group = groups.find(g => g.id === activeChat);
+            if (!group) {
+                alert('Group not found');
+                return;
+            }
+
+            // Check if user is an admin
+            if (!isGroupAdmin(group)) {
+                alert('Only group admins can remove members');
+                return;
+            }
+
+            // Filter members who can be removed (exclude the current admin)
+            const removableMembers = group.members.filter(memberId => memberId !== currentUser.uid);
+
+            if (removableMembers.length === 0) {
+                alert('No members to remove!');
+                return;
+            }
+
+            const membersList = removableMembers.map(memberId => {
+                const user = allUsers[memberId];
+                if (!user) return '';
+                return `
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="remove-${memberId}" value="${memberId}">
+                        <label for="remove-${memberId}">${user.username}</label>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('remove-members-list').innerHTML = membersList;
+            document.getElementById('remove-members-modal').classList.add('active');
+        }
+
+        function openGroupSettings() {
+            if (!activeChat || activeChatType !== 'group') {
+                alert('Please select a group first');
+                return;
+            }
+
+            const group = groups.find(g => g.id === activeChat);
+            if (!group) {
+                alert('Group not found');
+                return;
+            }
+
+            // Check if user is the group admin (only admin can change group settings)
+            if (group.admin !== currentUser.uid) {
+                alert('Only the group admin can change group settings');
+                return;
+            }
+
+            // Set current group name in input
+            document.getElementById('edit-group-name').value = group.name;
+            document.getElementById('group-settings-modal').classList.add('active');
+        }
+
+        async function removeSelectedMembers() {
+            const selected = Array.from(document.querySelectorAll('#remove-members-list input:checked')).map(cb => cb.value);
+            
+            if (selected.length === 0) {
+                alert('Please select at least one member to remove');
+                return;
+            }
+
+            const group = groups.find(g => g.id === activeChat);
+            if (!group) {
+                alert('Group not found');
+                return;
+            }
+
+            try {
+                // Remove selected members from the group
+                const updatedMembers = group.members.filter(memberId => !selected.includes(memberId));
+                
+                // Update group members
+                await db.ref('groups').child(activeChat).update({
+                    members: updatedMembers
+                });
+
+                // Remove group from each removed member's groups list
+                for (const uid of selected) {
+                    await db.ref('users').child(uid).child('groups').transaction(groups => {
+                        if (!groups) return [];
+                        return groups.filter(gid => gid !== activeChat);
+                    });
+                }
+
+                closeModal('remove-members-modal');
+                alert(`Removed ${selected.length} member(s) from the group!`);
+                
+                // Reload groups to reflect changes
+                loadFriendsAndGroups();
+            } catch (error) {
+                alert('Error removing members: ' + error.message);
+            }
+        }
+        
+        async function updateGroupName() {
+            const newName = document.getElementById('edit-group-name').value.trim();
+            
+            if (!newName) {
+                alert('Group name cannot be empty');
+                return;
+            }
+
+            const group = groups.find(g => g.id === activeChat);
+            if (!group) {
+                alert('Group not found');
+                return;
+            }
+
+            try {
+                await db.ref('groups').child(activeChat).update({
+                    name: newName
+                });
+
+                closeModal('group-settings-modal');
+                alert('Group name updated!');
+                
+                // Reload groups to reflect changes
+                loadFriendsAndGroups();
+            } catch (error) {
+                alert('Error updating group name: ' + error.message);
+            }
+        }
+
+        async function deleteGroup() {
+            if (!confirm('Are you sure you want to delete this group? This action cannot be undone.')) {
+                return;
+            }
+
+            const group = groups.find(g => g.id === activeChat);
+            if (!group) {
+                alert('Group not found');
+                return;
+            }
+
+            try {
+                // Remove group from all members' groups lists
+                for (const memberId of group.members) {
+                    await db.ref('users').child(memberId).child('groups').transaction(groups => {
+                        if (!groups) return [];
+                        return groups.filter(gid => gid !== activeChat);
+                    });
+                }
+
+                // Delete group messages
+                await db.ref('groupMessages').child(activeChat).remove();
+                
+                // Delete the group
+                await db.ref('groups').child(activeChat).remove();
+
+                closeModal('group-settings-modal');
+                alert('Group deleted!');
+                
+                // Reset active chat and reload data
+                activeChat = null;
+                activeChatType = null;
+                loadFriendsAndGroups();
+            } catch (error) {
+                alert('Error deleting group: ' + error.message);
+            }
+        }
+
+        function setAdminTab(tab) {
+            // Update tab states
+            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.admin-tab[onclick="setAdminTab('${tab}')"]`).classList.add('active');
+
+            const group = groups.find(g => g.id === activeChat);
+            if (!group) return;
+
+            const membersList = document.getElementById('admin-members-list');
+            const label = document.getElementById('admin-modal-label');
+            const button = document.getElementById('admin-action-btn');
+
+            if (tab === 'promote') {
+                // Filter members who are not already admins (excluding the current admin)
+                const availableMembers = group.members.filter(memberId => 
+                    memberId !== currentUser.uid && 
+                    !(group.admins && group.admins.includes(memberId))
+                );
+
+                if (availableMembers.length === 0) {
+                    membersList.innerHTML = '<p>All members are already admins!</p>';
+                    label.textContent = 'No members available to promote';
+                    button.textContent = 'No Members to Promote';
+                    button.disabled = true;
+                    return;
+                }
+
+                const friendsList = availableMembers.map(memberId => {
+                    const user = allUsers[memberId];
+                    if (!user) return '';
+                    return `
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="admin-${memberId}" value="${memberId}">
+                            <label for="admin-${memberId}">${user.username}</label>
+                        </div>
+                    `;
+                }).join('');
+
+                membersList.innerHTML = friendsList;
+                label.textContent = 'Select Members to Promote to Admin';
+                button.textContent = 'Promote Selected Members';
+                button.disabled = false;
+                button.onclick = () => promoteSelectedAdmins();
+            } else if (tab === 'demote') {
+                // Filter current admins (excluding the group owner)
+                const currentAdmins = group.admins ? group.admins.filter(adminId => adminId !== group.admin) : [];
+
+                if (currentAdmins.length === 0) {
+                    membersList.innerHTML = '<p>No admins to demote!</p>';
+                    label.textContent = 'No admins available to demote';
+                    button.textContent = 'No Admins to Demote';
+                    button.disabled = true;
+                    return;
+                }
+
+                const adminsList = currentAdmins.map(adminId => {
+                    const user = allUsers[adminId];
+                    if (!user) return '';
+                    return `
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="demote-${adminId}" value="${adminId}">
+                            <label for="demote-${adminId}">${user.username} (Admin)</label>
+                        </div>
+                    `;
+                }).join('');
+
+                membersList.innerHTML = adminsList;
+                label.textContent = 'Select Admins to Demote to Member';
+                button.textContent = 'Demote Selected Admins';
+                button.disabled = false;
+                button.onclick = () => demoteSelectedAdmins();
+            }
+        }
+
+        async function promoteSelectedAdmins() {
+            const selected = Array.from(document.querySelectorAll('#admin-members-list input:checked')).map(cb => cb.value);
+            
+            if (selected.length === 0) {
+                alert('Please select at least one member to promote');
+                return;
+            }
+
+            const group = groups.find(g => g.id === activeChat);
+            if (!group) {
+                alert('Group not found');
+                return;
+            }
+
+            try {
+                // Add selected members to admins array
+                const currentAdmins = group.admins || [group.admin];
+                const updatedAdmins = [...currentAdmins, ...selected];
+                
+                await db.ref('groups').child(activeChat).update({
+                    admins: updatedAdmins
+                });
+
+                alert(`Promoted ${selected.length} member(s) to admin!`);
+                setAdminTab('promote'); // Refresh the promote tab
+                
+                // Reload groups to reflect changes
+                loadFriendsAndGroups();
+            } catch (error) {
+                alert('Error promoting admins: ' + error.message);
+            }
+        }
+
+        async function addSelectedMembers() {
+            const selected = Array.from(document.querySelectorAll('#add-members-list input:checked')).map(cb => cb.value);
+            if (selected.length === 0) {
+                alert('Please select at least one friend to add');
+                return;
+            }
+
+            const group = groups.find(g => g.id === activeChat);
+            if (!group) {
+                alert('Group not found');
+                return;
+            }
+
+            try {
+                // Use Set to avoid duplicates
+                const updatedMembers = Array.from(new Set([...group.members, ...selected]));
+                
+                // Update group members in database
+                await db.ref('groups').child(activeChat).update({ 
+                    members: updatedMembers 
+                });
+                
+                // Update each member's groups list
+                for (const uid of selected) {
+                    await db.ref('users').child(uid).child('groups').transaction(gs => {
+                        if (!gs) gs = [];
+                        if (!gs.includes(activeChat)) gs.push(activeChat);
+                        return gs;
+                    });
+                }
+                
+                closeModal('add-members-modal');
+                alert(`Added ${selected.length} member(s) to ${group.name}!`);
+                
+                // Refresh the groups list
+                if (typeof loadFriendsAndGroups === 'function') {
+                    await loadFriendsAndGroups();
+                }
+                
+                // Refresh the current chat view if open
+                if (activeChat === group.id && activeChatType === 'group') {
+                    render();
+                }
+            } catch (error) {
+                console.error('Error adding members:', error);
+                alert('Error adding members: ' + (error.message || 'Unknown error occurred'));
+            }
+        }
+
+        async function createGroup(e) {
+            e.preventDefault();
+            const groupName = document.getElementById('group-name').value.trim();
+            if (!groupName) return;
+
+            const checkboxes = document.querySelectorAll('#group-friends input[type="checkbox"]:checked');
+            const members = Array.from(checkboxes).map(cb => cb.value);
+            
+            // Add current user to members
+            members.push(currentUser.uid);
+
+            try {
+                const groupRef = await db.ref('groups').push({
+                    name: groupName,
+                    createdBy: currentUser.uid,
+                    createdAt: Date.now(),
+                    members: members,
+                    admins: [currentUser.uid] // Add creator as first admin
+                });
+
+                // Add group to each member's groups list
+                for (const uid of members) {
+                    await db.ref('users').child(uid).child('groups').transaction(groups => {
+                        if (!groups) return [groupRef.key];
+                        if (!groups.includes(groupRef.key)) {
+                            groups.push(groupRef.key);
+                        }
+                        return groups;
+                    });
+                }
+
+                closeModal('group-modal');
+                document.getElementById('group-name').value = '';
+                document.querySelectorAll('#group-friends input[type="checkbox"]').forEach(cb => cb.checked = false);
+                
+                // Select the new group
+                selectChat(groupRef.key, 'group');
+            }
+
+            async function promoteSelectedAdmins() {
+                const selected = Array.from(document.querySelectorAll('#admin-members-list input:checked')).map(cb => cb.value);
+                
+                if (selected.length === 0) {
+                    alert('Please select at least one member to promote');
+                    return;
+                }
+
+                const group = groups.find(g => g.id === activeChat);
+                if (!group) {
+                    alert('Group not found');
+                    return;
+                }
+
+                try {
+                    // Add selected members to admins array
+                    const currentAdmins = group.admins || [group.admin];
+                    const updatedAdmins = [...currentAdmins, ...selected];
+                    
+                    await db.ref('groups').child(activeChat).update({
+                        admins: updatedAdmins
+                    });
+
+                    alert(`Promoted ${selected.length} member(s) to admin!`);
+                    setAdminTab('promote'); // Refresh the promote tab
+                    
+                    // Reload groups to reflect changes
+                    loadFriendsAndGroups();
+                } catch (error) {
+                    alert('Error promoting admins: ' + error.message);
+                }
+            }
+
+            async function addSelectedMembers() {
+                const selected = Array.from(document.querySelectorAll('#add-members-list input:checked')).map(cb => cb.value);
+                if (selected.length === 0) {
+                    alert('Please select at least one friend to add');
+                    return;
+                }
+
+                const group = groups.find(g => g.id === activeChat);
+                if (!group) {
+                    alert('Group not found');
+                    return;
+                }
+
+                try {
+                    // Use Set to avoid duplicates
+                    const updatedMembers = Array.from(new Set([...group.members, ...selected]));
+                    
+                    // Update group members in database
+                    await db.ref('groups').child(activeChat).update({ 
+                        members: updatedMembers 
+                    });
+                    
+                    // Update each member's groups list
+                    for (const uid of selected) {
+                        await db.ref('users').child(uid).child('groups').transaction(gs => {
+                            if (!gs) gs = [];
+                            if (!gs.includes(activeChat)) gs.push(activeChat);
+                            return gs;
+                        });
+                    }
+                    
+                    closeModal('add-members-modal');
+                    alert(`Added ${selected.length} member(s) to ${group.name}!`);
+                    
+                    // Refresh the groups list
+                    if (typeof loadFriendsAndGroups === 'function') {
+                        await loadFriendsAndGroups();
+                    }
+                    
+                    // Refresh the current chat view if open
+                    if (activeChat === group.id && activeChatType === 'group') {
+                        render();
+                    }
+                } catch (error) {
+                    console.error('Error adding members:', error);
+                    alert('Error adding members: ' + (error.message || 'Unknown error occurred'));
+                }
+            }
+
+            async function createGroup(e) {
+                e.preventDefault();
+                const groupName = document.getElementById('group-name').value.trim();
+                if (!groupName) return;
+
+                const checkboxes = document.querySelectorAll('#group-friends input[type="checkbox"]:checked');
+                const members = Array.from(checkboxes).map(cb => cb.value);
+                
+                // Add current user to members
+                members.push(currentUser.uid);
+
+                try {
+                    const groupRef = await db.ref('groups').push({
+                        name: groupName,
+                        createdBy: currentUser.uid,
+                        createdAt: Date.now(),
+                        members: members,
+                        admins: [currentUser.uid] // Add creator as first admin
+                    });
+
+                    // Add group to each member's groups list
+                    for (const uid of members) {
+                        await db.ref('users').child(uid).child('groups').transaction(groups => {
+                            if (!groups) return [groupRef.key];
+                            if (!groups.includes(groupRef.key)) {
+                                groups.push(groupRef.key);
+                            }
+                            return groups;
+                        });
+                    }
+
+                    closeModal('group-modal');
+                    document.getElementById('group-name').value = '';
+                    document.querySelectorAll('#group-friends input[type="checkbox"]').forEach(cb => cb.checked = false);
+                    
+                    // Select the new group
+                    selectChat(groupRef.key, 'group');
+                } catch (error) {
+                
+                // Reload groups to reflect changes
+                loadFriendsAndGroups();
+            } catch (error) {
+                alert('Error promoting admins: ' + error.message);
+            }
+        }
+
+        async function addSelectedMembers() {
+            const selected = Array.from(document.querySelectorAll('#add-members-list input:checked')).map(cb => cb.value);
+            if (selected.length === 0) {
+                alert('Please select at least one friend to add');
+                return;
+            }
+
+            const group = groups.find(g => g.id === activeChat);
+            if (!group) {
+                alert('Group not found');
+                return;
+            }
+
+            try {
+                // Use Set to avoid duplicates
+                const updatedMembers = Array.from(new Set([...group.members, ...selected]));
+                
+                // Update group members in database
+                await db.ref('groups').child(activeChat).update({ 
+                    members: updatedMembers 
+                });
+                
+                // Update each member's groups list
+                for (const uid of selected) {
+                    await db.ref('users').child(uid).child('groups').transaction(gs => {
+                        if (!gs) gs = [];
+                        if (!gs.includes(activeChat)) gs.push(activeChat);
+                        return gs;
+                    });
+                }
+                
+                closeModal('add-members-modal');
+                alert(`Added ${selected.length} member(s) to ${group.name}!`);
+                
+                // Refresh the groups list
+                if (typeof loadFriendsAndGroups === 'function') {
+                    await loadFriendsAndGroups();
+                }
+                
+                // Refresh the current chat view if open
+                if (activeChat === group.id && activeChatType === 'group') {
+                    render();
+                }
+            } catch (error) {
+                console.error('Error adding members:', error);
+                alert('Error adding members: ' + (error.message || 'Unknown error occurred'));
+            }
+        }
+
+        async function createGroup(e) {
+            e.preventDefault();
+            const groupName = document.getElementById('group-name').value.trim();
+            if (!groupName) return;
+
+            const checkboxes = document.querySelectorAll('#group-friends input[type="checkbox"]:checked');
+            const members = Array.from(checkboxes).map(cb => cb.value);
+            
+            // Add current user to members
+            members.push(currentUser.uid);
+
+            try {
+                const groupRef = await db.ref('groups').push({
+                    name: groupName,
+                    createdBy: currentUser.uid,
+                    createdAt: Date.now(),
+                    members: members,
+                    admins: [currentUser.uid] // Add creator as first admin
+                });
+
+                // Add group to each member's groups list
+                for (const uid of members) {
+                    await db.ref('users').child(uid).child('groups').transaction(groups => {
+                        if (!groups) return [groupRef.key];
+                        if (!groups.includes(groupRef.key)) {
+                            groups.push(groupRef.key);
+                        }
+                        return groups;
+                    });
+                }
+
+                closeModal('group-modal');
+                document.getElementById('group-name').value = '';
+                document.querySelectorAll('#group-friends input[type="checkbox"]').forEach(cb => cb.checked = false);
+                
+                // Select the new group
+                selectChat(groupRef.key, 'group');
+            } catch (error) {
+                alert('Error creating group: ' + error.message);
+            }
+        }
+
+        async function toggleAdminStatus(userId, makeAdmin) {
+            if (!activeChat || activeChatType !== 'group') return;
+            
+            try {
+                const groupRef = db.ref('groups').child(activeChat);
+                const snapshot = await groupRef.once('value');
+                const group = snapshot.val();
+                
+                if (group.createdBy !== currentUser.uid) {
+                    alert('Only the group creator can manage admins');
+                    return;
+                }
+
+                let updatedAdmins = [...(group.admins || [])];
+                
+                if (makeAdmin) {
+                    if (!updatedAdmins.includes(userId)) {
+                        updatedAdmins.push(userId);
+                        await groupRef.update({ admins: updatedAdmins });
+                        alert('Admin added successfully');
+                    }
+                } else {
+                    // Don't allow removing the group creator from admins
+                    if (userId === group.createdBy) {
+                        alert('Cannot remove group creator from admins');
+                        return;
+                    }
+                    updatedAdmins = updatedAdmins.filter(id => id !== userId);
+                    await groupRef.update({ admins: updatedAdmins });
+                    alert('Admin removed successfully');
+                }
+                
+                // Refresh the group settings to reflect changes
+                openGroupSettings();
+            } catch (error) {
+                alert('Error updating admin status: ' + error.message);
+            }
+        }
+
+        function isGroupAdmin(group, userId) {
+            return group && group.admins && group.admins.includes(userId);
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        // Theme toggle
+        function toggleTheme() {
+            theme = theme === 'light' ? 'dark' : 'light';
+            localStorage.setItem('atom-theme', theme);
+            document.body.classList.toggle('dark-theme');
+            render();
+        }
+
+        // Firebase listeners
+        auth.onAuthStateChanged(async (user) => {
+            currentUser = user;
+            if (user) {
+                // Load user profile
+                const profileSnap = await db.ref('users').child(user.uid).once('value');
+                userProfile = profileSnap.val();
+
+                // Listen to profile updates
+                db.ref('users').child(user.uid).on('value', snap => {
+                    userProfile = snap.val();
+                    loadFriendsAndGroups();
+                });
+
+                loadFriendsAndGroups();
+            } else {
+                userProfile = null;
+                friends = [];
+                groups = [];
+                friendRequests = [];
+                messages = {};
+                render();
+            }
+        });
+
+        async function loadFriendsAndGroups() {
+            if (!userProfile) {
+                console.log('No user profile found');
+                return;
+            }
+
+            console.log('Loading friends and groups for user:', userProfile.username);
+
+            // Load friends
+            if (userProfile.friends && userProfile.friends.length > 0) {
+                console.log('Loading', userProfile.friends.length, 'friends');
+                const friendsData = [];
+                for (const fid of userProfile.friends) {
+                    const snap = await db.ref('users').child(fid).once('value');
+                    if (snap.exists()) {
+                        friendsData.push({ id: fid, ...snap.val() });
+                        allUsers[fid] = snap.val();
+
+                        // Listen to messages
+                        const chatKey = [currentUser.uid, fid].sort().join('_');
+                        db.ref('messages').child(chatKey).on('value', msgSnap => {
+                            messages[chatKey] = [];
+                            msgSnap.forEach(child => {
+                                messages[chatKey].push({ id: child.key, ...child.val() });
+                            });
+                            if (activeChat === fid && activeChatType === 'friend') render();
+                        });
+                    }
+                }
+                friends = friendsData;
+                console.log('Loaded friends:', friends.length);
+            } else {
+                friends = [];
+                console.log('No friends found');
+            }
+
+            // Load friend requests
+            if (userProfile.friendRequests && userProfile.friendRequests.length > 0) {
+                const reqData = [];
+                for (const rid of userProfile.friendRequests) {
+                    const snap = await db.ref('users').child(rid).once('value');
+                    if (snap.exists()) {
+                        reqData.push({ id: rid, ...snap.val() });
+                    }
+                }
+                friendRequests = reqData;
+            } else {
+                friendRequests = [];
+            }
+
+            // Load groups
+            if (userProfile.groups && userProfile.groups.length > 0) {
+                console.log('Loading', userProfile.groups.length, 'groups');
+                const groupsData = [];
+                for (const gid of userProfile.groups) {
+                    const snap = await db.ref('groups').child(gid).once('value');
+                    if (snap.exists()) {
+                        const groupData = { id: gid, ...snap.val() };
+                        groupsData.push(groupData);
+
+                        // Load all group members into allUsers
+                        if (groupData.members) {
+                            for (const memberId of groupData.members) {
+                                if (!allUsers[memberId]) {
+                                    const memberSnap = await db.ref('users').child(memberId).once('value');
+                                    if (memberSnap.exists()) {
+                                        allUsers[memberId] = memberSnap.val();
+                                    }
+                                }
+                            }
+                        }
+
+                        // Listen to group messages
+                        db.ref('groupMessages').child(gid).on('value', msgSnap => {
+                            messages[gid] = [];
+                            msgSnap.forEach(child => {
+                                messages[gid].push({ id: child.key, ...child.val() });
+                            });
+                            if (activeChat === gid && activeChatType === 'group') render();
+                        });
+                    }
+                }
+                groups = groupsData;
+                console.log('Loaded groups:', groups.length);
+            } else {
+                groups = [];
+                console.log('No groups found');
+            }
+
+            console.log('Final data - Friends:', friends.length, 'Groups:', groups.length, 'All users:', Object.keys(allUsers).length);
+            render();
+        }
 
         // Initial render
         render();
